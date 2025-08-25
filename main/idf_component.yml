@@ -1,0 +1,9 @@
+dependencies:
+  idf: ">=5.5.0"
+  lvgl/lvgl: "8.4.0"
+  
+  
+  waveshare/esp32_p4_wifi6_touch_lcd_xc:
+    version: "*"  
+    rules:
+      - if: "target == esp32p4"

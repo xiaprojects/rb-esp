@@ -55,6 +55,9 @@
  * - ESP32-S3 2.8" Inch Round display 480x480 TOUCH
  * - https://www.waveshare.com/esp32-s3-touch-lcd-2.8c.htm
  */
+
+#include "sdkconfig.h"
+ 
 #include "RB02.h"
 #include "RB02_GUIHelpers.h"
 
@@ -1045,7 +1048,7 @@ bool nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
 #endif
 
 #ifdef RB_ENABLE_GPS
-void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId);
+void NMEA_ParseBuffer(uint8_t *data, const int rxBytes, uint8_t SourceId);
 void uart_fetch_data()
 {
   if (GpsSpeed0ForDisable == 0)
@@ -1056,7 +1059,7 @@ void uart_fetch_data()
   free(data);
 }
 
-void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
+void NMEA_ParseBuffer(uint8_t *data, const int rxBytes, uint8_t SourceId)
 {
 #ifdef RB01_GPS_PROTOCOL_BLE
   if (SourceId == RB01_GPS_PROTOCOL_BLE && singletonConfig()->settingsBluetoothGPS == 0)
@@ -1878,6 +1881,15 @@ void uartApplyRates()
     lv_label_set_text(GPSDiag_UARTBaud, buf);
   }
 #endif
+
+#if CONFIG_IDF_TARGET_ESP32S3
+  #define RB_UART_CLK UART_SCLK_APB
+#elif CONFIG_IDF_TARGET_ESP32P4
+  #define RB_UART_CLK UART_SCLK_DEFAULT
+#else
+  #define RB_UART_CLK UART_SCLK_DEFAULT
+#endif
+
   if (GpsSpeed0ForDisable > 0)
   {
     // 1.0.9 Enable UART for NMEA GPS Input
@@ -1887,7 +1899,7 @@ void uartApplyRates()
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
+        .source_clk = RB_UART_CLK,   //Brice
     };
     // Setup Baud Rate
     uart_param_config(1, &uart_config);

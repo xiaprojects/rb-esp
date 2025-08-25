@@ -1,3 +1,5 @@
+
+if(IDF_TARGET STREQUAL "esp32s3")
 idf_component_register(
                         SRCS  "main.c" 
                               "EXIO/TCA9554PWR.c"
@@ -49,3 +51,38 @@ idf_component_register(
                                      "./BAT_Driver"
                                      "."
                         )
+target_compile_definitions(${COMPONENT_LIB} PRIVATE
+  CONFIG_EXAMPLE_USE_BOUNCE_BUFFER=1
+  CONFIG_EXAMPLE_AVOID_TEAR_EFFECT_WITH_SEM=0
+)
+endif()
+
+
+if(IDF_TARGET STREQUAL "esp32p4")
+idf_component_register(
+                        SRCS  "main.c" 
+                              "LCD_Driver/JD9365_34.c" 
+                              "RB/RB02.c"
+                              "RB/RB02_Checklist.c"
+                              "RB/RB02_Config.c"
+                              "RB/RB02_GPSMap.c"
+                              "RB/RB02_AAttitude.c"
+                              "RB/RB02_Altimeter.c"
+                              "RB/RB02_Gyro.c"
+                              "RB/RB02_GPSDiag.c"
+                              "RB/RB02_Setup.c"
+                              "RB/RB02_Console.c"
+                              "RB/RB02_GUIHelpers.c"
+                              "RB/RB02_DataLogger.c"
+                              "RB/RB02_Navigator.c"
+                              "RB/RB02_Workflow.c"
+                              "RB/RB04_EMS.c"
+                              "RB/Vendor.c"
+                              "RB/madgwick.c"
+
+                        INCLUDE_DIRS "./RB"
+                                     "./LVGL_UI"
+                                     "."
+                        )
+  target_link_libraries(${COMPONENT_LIB} PRIVATE idf::esp_driver_i2c)
+endif()
