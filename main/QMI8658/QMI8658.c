@@ -499,8 +499,35 @@ void getAccelerometer(void)
     AccelFilteredWithoutPanelAlignment.y = (FilterMoltiplier * AccelFilteredWithoutPanelAlignment.y + Accel.y) / (FilterMoltiplier + 1.0);
     AccelFilteredWithoutPanelAlignment.z = (FilterMoltiplier * AccelFilteredWithoutPanelAlignment.z + Accel.z) / (FilterMoltiplier + 1.0);
 
-    PanelAlignmentMatrixApply(AccelFilteredWithoutPanelAlignment, &AccelFiltered, PanelAlignment);
-}
+
+    IMUdata aS;
+    IMUdata aB_out;
+        aS.x = AccelFilteredWithoutPanelAlignment.z;
+    // Pitch
+    aS.y = AccelFilteredWithoutPanelAlignment.y;
+    // Yaw
+    aS.z = AccelFilteredWithoutPanelAlignment.x;
+
+    PanelAlignmentMatrixApply(aS, &aB_out, PanelAlignment);
+
+    AccelFiltered.y = aB_out.y;
+    AccelFiltered.z = aB_out.x;
+    AccelFiltered.x = aB_out.z;
+
+/*    // ROLL
+    aS.x = AccelFilteredWithoutPanelAlignment.y;
+    // Pitch
+    aS.y = AccelFilteredWithoutPanelAlignment.z;
+    // Yaw
+    aS.z = AccelFilteredWithoutPanelAlignment.x;
+
+    PanelAlignmentMatrixApply(aS, &aB_out, PanelAlignment);
+
+    AccelFiltered.y = aB_out.x;
+    AccelFiltered.z = aB_out.y;
+    AccelFiltered.x = aB_out.z;
+*/
+    }
 
 // Function to calculate roll (bank) from accelerometer
 uint16_t getRollFromAccel(float axNotUsed, float ay, float az)
@@ -571,7 +598,24 @@ void getGyroscope(void)
     GyroFilteredWithoutPanelAlignment.y = (FilterMoltiplierGyro * GyroFiltered.y + Gyro.y) / (FilterMoltiplierGyro + 1.0);
     GyroFilteredWithoutPanelAlignment.z = (FilterMoltiplierGyro * GyroFiltered.z + Gyro.z) / (FilterMoltiplierGyro + 1.0);
 
-    PanelAlignmentMatrixApply(GyroFilteredWithoutPanelAlignment, &GyroFiltered, PanelAlignment);
+    IMUdata aS;
+    IMUdata aB_out;
+    IMUdata PanelAlignmentGyro;
+    // ROLL
+    aS.z = GyroFilteredWithoutPanelAlignment.x;
+    PanelAlignmentGyro = PanelAlignment;
+    // Pitch
+    aS.y = GyroFilteredWithoutPanelAlignment.y;
+
+    // Yaw
+    aS.x = GyroFilteredWithoutPanelAlignment.z;
+
+
+    PanelAlignmentMatrixApply(aS, &aB_out, PanelAlignmentGyro);
+
+    GyroFiltered.x = aB_out.z;
+    GyroFiltered.y = aB_out.y;
+    GyroFiltered.z = aB_out.x;
 }
 void getGFactor(void)
 {
@@ -627,8 +671,9 @@ float unwrapAngle(float prev, float current)
 // Attitude Panel Pitch Alignment Temporary workaround for demo #85
 void PanelAlignmentMatrixApply(IMUdata aS, IMUdata *aB_out, IMUdata ref)
 {
+
     // Due to the high risk routing we add a backup, if 0 skip
-    if (ref.x == 0 && ref.y == 0 && ref.z == 0)
+    if ((int)ref.x == 0 && (int)ref.y == 0 && (int)ref.z == 0)
     {
         aB_out->x = aS.x;
         aB_out->y = aS.y;
@@ -637,18 +682,48 @@ void PanelAlignmentMatrixApply(IMUdata aS, IMUdata *aB_out, IMUdata ref)
     }
 
     // Alignment angles
-    float roll = ref.y * DEG2RAD; // roll left
-    float p = ref.x * DEG2RAD;
+    float roll = ref.x * DEG2RAD; // roll left
+    float p = ref.y * DEG2RAD;
     float yaw = ref.z * DEG2RAD; // no yaw
+
     float cr = cosf(roll), sr = sinf(roll);
     float cp = cosf(p), sp = sinf(p);
     float cy = cosf(yaw), sy = sinf(yaw);
 
     // Rotation matrix (ZYX order: Rz * Ry * Rx)
+    /*
+    XYZ order (R = Rx * Ry * Rz)
     float R[3][3] = {
         {cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr},
         {sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr},
         {-sp, cp * sr, cp * cr}};
+*/
+    float R[3][3];
+    R[0][0] = cp * cy;
+    R[0][1] = -cp * sy;
+    R[0][2] = sp;
+
+    R[1][0] = sr * sp * cy + cr * sy;
+    R[1][1] = -sr * sp * sy + cr * cy;
+    R[1][2] = -sr * cp;
+
+    R[2][0] = -cr * sp * cy + sr * sy;
+    R[2][1] = cr * sp * sy + sr * cy;
+    R[2][2] = cr * cp;
+
+
+    R[0][0] = cp;
+    R[0][1] = sr*sp;
+    R[0][2] = -cr*sp;
+
+    R[1][0] = 0;
+    R[1][1] = cr;
+    R[1][2] = sr;
+
+    R[2][0] = sp;
+    R[2][1] = -sr*cp;
+    R[2][2] = cr*cp;
+
 
     aB_out->x = R[0][0] * aS.x + R[0][1] * aS.y + R[0][2] * aS.z;
     aB_out->y = R[1][0] * aS.x + R[1][1] * aS.y + R[1][2] * aS.z;

@@ -214,6 +214,25 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     *lineY += 40;
   }
 
+  
+  if (true)
+  {
+    lv_obj_t *SliderLabel = lv_label_create(parent);
+    lv_obj_set_size(SliderLabel, 300, 20);
+    lv_obj_align(SliderLabel, LV_ALIGN_CENTER, 0, *lineY);
+    lv_obj_set_style_text_align(SliderLabel, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(SliderLabel, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(SliderLabel, lv_color_white(), 0);
+    char buf[16 + 8];
+    sprintf(buf, "Result");
+    lv_label_set_text(SliderLabel, buf);
+
+    singletonConfig()->ui.panelMountAlignmentLabelHelper = SliderLabel;
+
+    *lineY += 32;
+  }
+
+
   if (true)
   {
     lv_obj_t *Slider = lv_slider_create(parent);
@@ -241,7 +260,7 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     lv_obj_set_style_text_font(SliderLabel, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(SliderLabel, lv_color_white(), 0);
     char buf[16 + 8];
-    sprintf(buf, "Panel Pitch: %.2f", PanelAlignment.x);
+    sprintf(buf, "Panel Roll: %.2f", PanelAlignment.x);
     lv_label_set_text(SliderLabel, buf);
 
     singletonConfig()->ui.panelMountAlignmentLabelPitch = SliderLabel;
@@ -278,7 +297,7 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     lv_obj_set_style_text_font(SliderLabel, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(SliderLabel, lv_color_white(), 0);
     char buf[16 + 8];
-    sprintf(buf, "Panel Roll: %.2f", PanelAlignment.z);
+    sprintf(buf, "Panel Yaw: %.2f", PanelAlignment.z);
     lv_label_set_text(SliderLabel, buf);
 
     singletonConfig()->ui.panelMountAlignmentLabelRoll = SliderLabel;
@@ -315,7 +334,7 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     lv_obj_set_style_text_font(SliderLabel, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(SliderLabel, lv_color_white(), 0);
     char buf[16 + 8];
-    sprintf(buf, "Panel Yaw: %.2f", PanelAlignment.y);
+    sprintf(buf, "Panel Pitch: %.2f", PanelAlignment.y);
     lv_label_set_text(SliderLabel, buf);
 
     singletonConfig()->ui.panelMountAlignmentLabelYaw = SliderLabel;

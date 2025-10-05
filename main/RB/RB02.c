@@ -1484,7 +1484,7 @@ void nvsStoreGyroCalibration()
     calBuffer = PanelAlignment.z * (RB_GYRO_CALIBRATION_PRECISION / 2.0);
     nvs_set_i16(my_handle, "panAZ", calBuffer);
 
-    calBuffer = PanelAlignment.x * (RB_GYRO_CALIBRATION_PRECISION / 2.0);
+    calBuffer = PanelAlignment.y * (RB_GYRO_CALIBRATION_PRECISION / 2.0);
     nvs_set_i16(my_handle, "panAY", calBuffer);
 
     calBuffer = PanelAlignment.x * (RB_GYRO_CALIBRATION_PRECISION / 2.0);
