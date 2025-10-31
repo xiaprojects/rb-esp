@@ -81,8 +81,9 @@ void VendorMakeDefaultsDefault()
     singletonConfig()->GyroHardwareCalibration.z = 0;
     singletonConfig()->bmp280override = 0;
     singletonConfig()->settingsAutoQNH = 0;
+#ifdef RB02_ESP_BLUETOOTH
     singletonConfig()->settingsBluetoothEnabled = 0;
-
+#endif
 
     PanelAlignment.x = 0;
     PanelAlignment.y = 0;

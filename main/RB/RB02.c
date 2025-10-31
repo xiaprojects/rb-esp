@@ -56,6 +56,15 @@
  * - ESP32-S3 2.8" Inch Round display 480x480 TOUCH
  * - https://www.waveshare.com/esp32-s3-touch-lcd-2.8c.htm
  */
+void DidYouJoinedDiscord()
+{
+
+  if (youAreThere == true)
+  {
+    MeansYouShallUseThePreBuildReleasedAndJoinDiscord();
+  }
+}
+
 #include "RB02.h"
 #include "RB02_GUIHelpers.h"
 
@@ -243,6 +252,7 @@ static void RB02_AltimeterQNHUpdated();
 static void CreateSingleDigit(lv_obj_t *parent, const lv_img_dsc_t *font, lv_obj_t **segments, int dx, int dy);
 void nvsStoreGMeter();
 void nvsRestoreGMeter();
+void nvsRestoreSettings();
 void disableTVScroll();
 void example1_BMP280_lvgl_tick(lv_timer_t *t);
 // Variables
@@ -283,7 +293,7 @@ typedef enum
 #ifdef RB_ENABLE_AAT
   RB02_TAB_AAT,
 #endif
-#ifdef RB_ENABLE_AAT
+#ifdef RB_ENABLE_ALT
   RB02_TAB_ALT,
 #endif
 #ifdef RB_ENABLE_ALD
@@ -506,7 +516,7 @@ void RB02_Example1(void)
 #endif
 
   ApplyCoding();
-  nvsRestoreGMeter();
+  nvsRestoreSettings();
   // LCD_Backlight = 0;
   // Set_Backlight(LCD_Backlight);
 
@@ -1224,6 +1234,23 @@ void nvsRestoreGMeter()
       printf("Error (%s) reading!\n", esp_err_to_name(err));
     }
 
+    printf("G-Meter read: %d %d\n",gmeter_max,gmeter_min);
+    nvs_close(my_handle);
+  }
+}
+
+
+void nvsRestoreSettings()
+{
+  //
+  nvs_handle_t my_handle;
+  esp_err_t err = nvs_open("storage", NVS_READONLY, &my_handle);
+  if (err != ESP_OK)
+  {
+    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+  }
+  else
+  {
     int32_t pcal = 0; // value will default to 0, if not set yet in NVS
     err = nvs_get_i32(my_handle, "pcal", &pcal);
     switch (err)
@@ -1248,7 +1275,7 @@ void nvsRestoreGMeter()
                                       // 1.1.23 Default is Advanced Attitude Indicator
 #ifdef RB_02_DISPLAY_TOUCH
 #else
-    defaultPageOrDemo = 3;
+    defaultPageOrDemo = 1;
 #endif
     err = nvs_get_u8(my_handle, "default", &defaultPageOrDemo);
     switch (err)
@@ -1526,6 +1553,7 @@ void nvsStoreGMeter()
   else
   {
     // Read
+    printf("G-Meter store: %f %f\n",GFactorMax,GFactorMin);
     err = nvs_set_i8(my_handle, "gmeter_max", 10.0 * GFactorMax);
     err = nvs_set_i8(my_handle, "gmeter_min", 10.0 * GFactorMin);
 
@@ -2257,6 +2285,13 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
       GpsSpeed0ForDisable = 0;
 #endif
       break;
+    case 99:
+      // Bugfix for alignment Gyro-Accelometer during initialisation timing
+      nvsRestoreGMeter();
+      AccelFilteredMax.x = 1;
+      AccelFilteredMax.y = 0;
+      GFactorDirty = 0;
+    break;
     case 100:
 
 #ifdef RB_ENABLE_CONSOLE

@@ -28,3 +28,17 @@
  *
 */
 #include "RB02_Config.h"
+/**
+
+RB-Avionics is an opensource product based on DUAL licensing product:
+1) GPL3 for non commercial
+2) Commercial agreement with subscription
+
+Even though it's open source, that doesn't mean it's easy or useful to compile.
+We strongly recommend using the available binary releases, as they undergo an automated testing cycle and other non-public changes.
+The source code should only be used as an example for those who have the skills necessary to run it, so please don't compile it or ask for support.
+
+To support you, we've created a community on Discord. Join us and learn how the devices work.
+We thank you for your support and sponsorship.
+ */
+#error You shall not compile yourself, please use the official releases and join the discord community
