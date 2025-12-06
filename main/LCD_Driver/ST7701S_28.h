@@ -24,8 +24,9 @@
 // The pixel number in horizontal and vertical
 #define EXAMPLE_LCD_V_RES              480
 #define EXAMPLE_LCD_H_RES              480
+#define EXAMPLE_LCD_BOUNCE_BUFFER_SIZE  (EXAMPLE_LCD_H_RES * 10) ///< Size of bounce buffer for RGB data
 
-#define EXAMPLE_LCD_PIXEL_CLOCK_HZ     (EXAMPLE_LCD_PIXEL_CLOCK_MHZ * 1000 * 1000)
+#define EXAMPLE_LCD_PIXEL_CLOCK_HZ     (18 * 1000 * 1000)
 #define EXAMPLE_LCD_BK_LIGHT_ON_LEVEL  1
 #define EXAMPLE_LCD_BK_LIGHT_OFF_LEVEL !EXAMPLE_LCD_BK_LIGHT_ON_LEVEL
 #define EXAMPLE_PIN_NUM_BK_LIGHT       6
@@ -50,12 +51,6 @@
 #define EXAMPLE_PIN_NUM_DATA14         18 // R3
 #define EXAMPLE_PIN_NUM_DATA15         17 // R4
 #define EXAMPLE_PIN_NUM_DISP_EN        -1
-
-#if CONFIG_EXAMPLE_DOUBLE_FB
-#define EXAMPLE_LCD_NUM_FB             2
-#else
-#define EXAMPLE_LCD_NUM_FB             1
-#endif 
 
 
 

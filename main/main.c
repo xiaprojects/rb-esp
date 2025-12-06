@@ -179,10 +179,10 @@ void app_main(void)
     Touch_Init();
 #endif
     SD_Init();
-    LVGL_Init();
+    LVGL_Init(panel_handle, tp);
     /********************* Demo *********************/
-    // Lvgl_Example1();
-    //
+    if (LVGL_lock(-1)) {
+
 #ifdef RB_DISPLAY_DEBUG
     const int DisplayDebugTrue = true;
 #else
@@ -203,17 +203,6 @@ void app_main(void)
     i2c_scan();
     vTaskDelay(pdMS_TO_TICKS(100));
 #endif
-    // lv_demo_widgets();
-    // lv_demo_keypad_encoder();
-    // lv_demo_benchmark();
-    // lv_demo_stress();
-    // lv_demo_music();
-
-    while (1)
-    {
-        // raise the task priority of LVGL and/or reduce the handler period can improve the performance
-        vTaskDelay(pdMS_TO_TICKS(10));
-        // The task running lv_timer_handler should have lower priority than that running `lv_tick_inc`
-        lv_timer_handler();
+        LVGL_unlock();
     }
 }
