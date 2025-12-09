@@ -416,9 +416,9 @@ void LCD_Init(void)
 {
     /********************* LCD *********************/
     ST7701S_reset();
-    ST7701S_CS_EN();
     vTaskDelay(pdMS_TO_TICKS(100));
     ST7701S_handle st7701s = ST7701S_newObject(LCD_MOSI, LCD_SCLK, LCD_CS, SPI2_HOST, SPI_METHOD);
+    ST7701S_CS_EN();
     
     ST7701S_screen_init(st7701s, 1);
     #if CONFIG_EXAMPLE_AVOID_TEAR_EFFECT_WITH_SEM

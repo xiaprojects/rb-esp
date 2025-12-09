@@ -64,6 +64,7 @@
 #include "madgwick.h"
 #include "nvs.h"
 #include <math.h>
+#include "RB02_Config.h"
 extern uint8_t EnableAttitudeMadgwick;
 
 IMUdata Accel;
