@@ -91,8 +91,17 @@
 #ifdef RB_ENABLE_ALT
 // Altimeter
 #include "RoundAltimeter.c"
+#ifndef LV_ATTRIBUTE_IMG_FI_NEEDLE
 #include "fi_needle.c"
 #include "fi_needle_small.c"
+#endif
+#endif
+
+#ifdef RB_ENABLE_SPD
+#ifndef LV_ATTRIBUTE_IMG_FI_NEEDLE
+#include "fi_needle.c"
+#include "fi_needle_small.c"
+#endif
 #endif
 
 #ifdef RB_ENABLE_TRN

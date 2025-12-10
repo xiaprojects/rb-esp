@@ -402,15 +402,10 @@ SemaphoreHandle_t sem_gui_ready;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-static bool example_on_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *event_data, void *user_data)
+// VSYNC event callback function
+IRAM_ATTR static bool rgb_lcd_on_vsync_event(esp_lcd_panel_handle_t panel, const esp_lcd_rgb_panel_event_data_t *edata, void *user_ctx)
 {
-    BaseType_t high_task_awoken = pdFALSE;
-#if CONFIG_EXAMPLE_AVOID_TEAR_EFFECT_WITH_SEM
-    if (xSemaphoreTakeFromISR(sem_gui_ready, &high_task_awoken) == pdTRUE) {
-        xSemaphoreGiveFromISR(sem_vsync_end, &high_task_awoken);
-    }
-#endif
-    return high_task_awoken == pdTRUE;
+    return LVGL_notify_rgb_vsync();
 }
 
 esp_lcd_panel_handle_t panel_handle = NULL;
@@ -418,9 +413,9 @@ void LCD_Init(void)
 {
     /********************* LCD *********************/
     ST7701S_reset();
-    ST7701S_CS_EN();
     vTaskDelay(pdMS_TO_TICKS(100));
     ST7701S_handle st7701s = ST7701S_newObject(LCD_MOSI, LCD_SCLK, LCD_CS, SPI2_HOST, SPI_METHOD);
+    ST7701S_CS_EN();
     
     ST7701S_screen_init(st7701s, 1);
     #if CONFIG_EXAMPLE_AVOID_TEAR_EFFECT_WITH_SEM
@@ -435,11 +430,11 @@ void LCD_Init(void)
     ESP_LOGI(LCD_TAG, "Install RGB LCD panel driver");
     esp_lcd_rgb_panel_config_t panel_config = {
         .data_width = 16, // RGB565 in parallel mode, thus 16bit in width
+        .bits_per_pixel = 16,             // Number of bits per pixel (color depth)
+        .sram_trans_align = 4,  // SRAM transaction alignment in bytes
         .psram_trans_align = 64,
-        .num_fbs = EXAMPLE_LCD_NUM_FB,
-#if CONFIG_EXAMPLE_USE_BOUNCE_BUFFER
-        .bounce_buffer_size_px = 20 * EXAMPLE_LCD_H_RES,
-#endif
+        .num_fbs = LVGL_PORT_LCD_RGB_BUFFER_NUMS,
+        .bounce_buffer_size_px = EXAMPLE_LCD_BOUNCE_BUFFER_SIZE,
         .clk_src = LCD_CLK_SRC_DEFAULT,
         .disp_gpio_num = EXAMPLE_PIN_NUM_DISP_EN,
         .pclk_gpio_num = EXAMPLE_PIN_NUM_PCLK,
@@ -480,18 +475,25 @@ void LCD_Init(void)
     };
     ESP_ERROR_CHECK(esp_lcd_new_rgb_panel(&panel_config, &panel_handle));
 
+    // ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
+
     ESP_LOGI(LCD_TAG, "Register event callbacks");
     esp_lcd_rgb_panel_event_callbacks_t cbs = {
-        .on_vsync = example_on_vsync_event,
+#if EXAMPLE_LCD_BOUNCE_BUFFER_SIZE > 0
+        .on_bounce_frame_finish = rgb_lcd_on_vsync_event, // Callback for bounce frame finish
+#else
+        .on_vsync = rgb_lcd_on_vsync_event, // Callback for vertical sync
+#endif
     };
-    ESP_ERROR_CHECK(esp_lcd_rgb_panel_register_event_callbacks(panel_handle, &cbs, &disp_drv));
+    ESP_ERROR_CHECK(esp_lcd_rgb_panel_register_event_callbacks(panel_handle, &cbs,NULL));
 
     ESP_LOGI(LCD_TAG, "Initialize RGB LCD panel");
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
+
     ST7701S_CS_Dis();
     Backlight_Init();
 }
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Backlight program
 

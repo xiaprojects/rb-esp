@@ -5,7 +5,6 @@
 #define RB_ENABLE_MAP 1
 #define VIBRATION_TEST 1
 #define RB_ENABLE_SPD 1
-#define RB_ENABLE_ATT 1
 #define RB_ENABLE_AAT 1
 #define RB_ENABLE_ALT 1
 #define RB_ENABLE_ALD 1

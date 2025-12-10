@@ -73,7 +73,7 @@ static void PanelMountPitchChanged(lv_event_t *e)
   PanelAlignment.x = equivalentFloat;
 
   char buf[16 + 8];
-  sprintf(buf, "Panel Pitch: %.2f", PanelAlignment.x);
+  sprintf(buf, "Panel Roll: %.2f", PanelAlignment.x);
   lv_label_set_text(singletonConfig()->ui.panelMountAlignmentLabelPitch, buf);
 
   nvsStoreGyroCalibration();
@@ -88,7 +88,7 @@ static void PanelMountRollChanged(lv_event_t *e)
   PanelAlignment.z = equivalentFloat;
 
   char buf[16 + 8];
-  sprintf(buf, "Panel Roll: %.2f", PanelAlignment.z);
+  sprintf(buf, "Panel Yaw: %.2f", PanelAlignment.z);
   lv_label_set_text(singletonConfig()->ui.panelMountAlignmentLabelRoll, buf);
 
   nvsStoreGyroCalibration();
@@ -103,7 +103,7 @@ static void PanelMountYawChanged(lv_event_t *e)
   PanelAlignment.y = equivalentFloat;
 
   char buf[16 + 8];
-  sprintf(buf, "Panel Yaw: %.2f", PanelAlignment.y);
+  sprintf(buf, "Panel Pitch: %.2f", PanelAlignment.y);
   lv_label_set_text(singletonConfig()->ui.panelMountAlignmentLabelYaw, buf);
 
   nvsStoreGyroCalibration();
