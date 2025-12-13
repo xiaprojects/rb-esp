@@ -34,6 +34,7 @@
 // 1.1.18 Unified single source for both displays
 #define RB_02_DISPLAY_21 21
 #define RB_02_DISPLAY_28 28
+#define RB_02_DISPLAY_17 17
 
 // 1.2.1
 //#define RB_02_28_WORKAROUND_BLACKSCREEN 1
@@ -121,8 +122,13 @@
 
 #ifdef RB_ENABLE_UART
 #define UART_RX_BUF_SIZE 1024
+#ifdef LC76GABMD
 #define TXD_PIN (GPIO_NUM_43)
 #define RXD_PIN (GPIO_NUM_44)
+#else
+#define TXD_PIN (GPIO_NUM_43)
+#define RXD_PIN (GPIO_NUM_44)
+#endif
 #define UART_N UART_NUM_1
 #endif
 

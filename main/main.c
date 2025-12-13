@@ -37,6 +37,13 @@
 #include "QMI8658.h"
 #include "ST7701S.h"
 #include "RB02.h"
+#if RB_02_DISPLAY_SIZE == RB_02_DISPLAY_17
+// ESP32-S3-Touch-AMOLED-1.75
+#ifdef RB_02_DISPLAY_TOUCH
+// TODO: we shall remove the compilation of the C file
+#include "FT5X06.h"
+#endif
+#endif
 #if RB_02_DISPLAY_SIZE == RB_02_DISPLAY_28
 // ESP32-S3-2.8C
 #ifdef RB_02_DISPLAY_TOUCH
