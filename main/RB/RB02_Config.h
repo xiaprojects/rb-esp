@@ -99,6 +99,14 @@ typedef struct
     lv_obj_t *panelMountAlignmentLabelYaw;
     lv_obj_t *panelMountAlignmentLabelHelper;
     lv_obj_t *SettingStatus2;
+
+#ifdef RB_ENABLE_SPD
+    lv_obj_t *labelGPSSpeed;
+#ifdef RB_ENABLE_IAS
+    lv_obj_t *labelIASSpeed;
+#endif
+#endif
+
 } RB02_UI;
 
 typedef struct

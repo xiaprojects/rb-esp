@@ -158,3 +158,25 @@
 #define RB02_BUTTON_BLE         3
 #endif
 #endif
+
+#if RB_PRODUCT_LINE == 2
+#define RB_ENABLE_BMP280 1
+#define RB_ENABLE_QMI8658 1
+#endif
+
+#ifdef RB_ENABLE_BME680
+#include "BME680.h"
+#ifdef RB_ENABLE_CODETECTOR
+#endif
+#undef RB_ENABLE_BMP280
+#endif
+
+
+#ifdef RB_ENABLE_NavCore
+#define RB_ENABLE_IAS 1
+#define RB_ENABLE_KNOB 1
+#define RB_ENABLE_MODBUS 1
+#define RB_ENABLE_CAN 1
+//#define RB_ENABLE_BMI270 1
+//#undef RB_ENABLE_QMI8658
+#endif

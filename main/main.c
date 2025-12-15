@@ -71,15 +71,19 @@
 // 1.1.9
 uint8_t DriverLoopMilliseconds = 40;
 
-// 1.0.9 Install in the loop BMP280
-void Get_BMP280(void);   // Declaration
 extern uint8_t workflow; // When sensor is ready (After Calibration)
+void Driver_Attitude_Loop(void) ;
+void Driver_Barometer_Loop(void) ;
+
+// To be moved into DriverFactory
 void Driver_Loop(void *parameter)
 {
     int loopThreshold = 10; // Delay the polling of certain sensors
     while (1)
     {
-        QMI8658_Loop();
+#if RB_PRODUCT_LINE == 2
+        Driver_Attitude_Loop();
+#endif
         // Delay the polling of certain sensors
         if (loopThreshold == 0)
         {
@@ -90,7 +94,7 @@ void Driver_Loop(void *parameter)
             if (workflow > 100)
             {
                 BAT_Get_Volts();
-                Get_BMP280();
+                Driver_Barometer_Loop();
             }
         }
         loopThreshold--;
@@ -123,17 +127,19 @@ void i2c_scan(void) {
 }
 #endif
 
+void DriverFactory_Init(void);
+
 void Driver_Init(void)
 {
     Flash_Searching();
     BAT_Init();
     I2C_Init();
+    DriverFactory_Init();
 #ifdef RB_DISPLAY_DEBUG
     i2c_scan();
     vTaskDelay(pdMS_TO_TICKS(100));
 #endif
     PCF85063_Init();
-    QMI8658_Init();
     EXIO_Init(); // Example Initialize EXIO
 /*
     // Keep the LCD under reset after Expander has being init

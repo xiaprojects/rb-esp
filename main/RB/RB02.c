@@ -56,7 +56,7 @@
  * - ESP32-S3 2.8" Inch Round display 480x480 TOUCH
  * - https://www.waveshare.com/esp32-s3-touch-lcd-2.8c.htm
  */
-void DidYouJoinedDiscord()
+ void DidYouJoinedDiscord()
 {
 
   if (youAreThere == true)
@@ -147,6 +147,19 @@ void DidYouJoinedDiscord()
 #include "esp_sleep.h"
 #include "QMI8658.h"
 #include "driver/uart.h"
+
+#ifdef RB_ENABLE_NavCore
+#include "RB02_NavCore.h"
+#include "ms4525do_rb.h"
+int32_t NavCore_GetEncoderDelta(void);
+bool NavCore_GetAndClearSwitchPressed(void);
+#endif
+
+#ifdef RB_ENABLE_NavCore
+#include "sc16is750.h"
+#include "driver/gpio.h"
+#include "freertos/stream_buffer.h"
+#endif
 #include "PCF85063.h"
 #include "RB02_SDCardInject.c"
 
@@ -404,7 +417,6 @@ const lv_res_t Screen_TurnSlip_Obj_Ball_Size = SCREEN_HEIGHT / 12;
 lv_obj_t *Screen_TurnSlip_Obj_Ball = NULL;
 lv_obj_t *Screen_TurnSlip_Obj_Label = NULL;
 lv_obj_t *Screen_TurnSlip_Obj_Turn = NULL;
-lv_obj_t *Screen_Speed_SpeedText = NULL;
 lv_obj_t *Screen_Speed_SpeedTick = NULL;
 
 lv_obj_t *Screen_GMeter_Ball = NULL;
@@ -1075,6 +1087,25 @@ void uart_fetch_data()
 {
   if (GpsSpeed0ForDisable == 0)
     return;
+
+#ifdef RB_ENABLE_NavCore
+  // In NavCore mode, SC16IS IRQ task fills a stream buffer. We only drain it here and parse NMEA
+  // from the main context (safer for LVGL/UI code paths).
+  static uint8_t data[UART_RX_BUF_SIZE + 1];
+
+  size_t rxBytes = xStreamBufferReceive(g_navcore_gps_sb, data, UART_RX_BUF_SIZE, 0);
+  if (rxBytes > 0)
+  {
+    data[rxBytes] = 0;
+    NMEA_ParseBuffer(data, (int)rxBytes, RB01_GPS_PROTOCOL_UART);
+  }
+  else
+  {
+    // keep existing GPS timeout supervision logic
+    NMEA_ParseBuffer(data, 0, RB01_GPS_PROTOCOL_UART);
+  }
+
+#else
   uint8_t *data = (uint8_t *)malloc(UART_RX_BUF_SIZE + 1);
   if (data == NULL)
   {
@@ -1087,6 +1118,7 @@ void uart_fetch_data()
     NMEA_ParseBuffer(data, rxBytes, RB01_GPS_PROTOCOL_UART);
   }
   free(data);
+#endif
 }
 #endif
 
@@ -1866,9 +1898,34 @@ void update_Speed_lvgl_tick(lv_timer_t *t)
 {
   static int lastSpeed = -1;
   int speed = 0;
+
+
+
+  // First we go for GPS
 #ifdef RB_ENABLE_GPS
+  int Gpsspeed = 0;
   speed = singletonConfig()->NMEA_DATA.speed * 10;
+  Gpsspeed = speed;
 #endif
+
+// We are using the NavCore define because it is already "protected by IAS"
+#if defined(RB_ENABLE_NavCore)
+  // Airspeed from MS4525DO (dP) instead of GPS speed
+  // rho = 1.225 by default (ISA sea level). You can later compute rho from pressure/temp.
+  if (MS4525DO_Update(1.225f) == ESP_OK)
+  {
+    int iASSpeed = MS4525DO_AirspeedKmh10(); // km/h * 10
+    speed = (lastSpeed * 5 + iASSpeed) / 6; 
+  }
+  else
+  {
+    // Raise INOP
+    // TODO
+  }
+#else
+
+#endif
+
   if (speed != lastSpeed)
   {
     // printf("NMEA: Speed %d-->%d m/s Angle: %ld\n", lastSpeed, speed, (int32_t)(speed));
@@ -1905,7 +1962,12 @@ void update_Speed_lvgl_tick(lv_timer_t *t)
     fspeed = singletonConfig()->NMEA_DATA.speed;
 #endif
     snprintf(buf, sizeof(buf), "%.0f", fspeed / isKt); // KT
-    lv_label_set_text(Screen_Speed_SpeedText, buf);
+    lv_label_set_text(singletonConfig()->ui.labelGPSSpeed, buf);
+
+#if defined(RB_ENABLE_IAS)
+    snprintf(buf, sizeof(buf), "%.0f", (float)speed / isKt); // KT
+    lv_label_set_text(singletonConfig()->ui.labelIASSpeed, buf);
+#endif
   }
 }
 #endif
@@ -1956,7 +2018,13 @@ void uartApplyRates()
   if (GpsSpeed0ForDisable > 0)
   {
 #ifdef RB_ENABLE_UART
-    // 1.0.9 Enable UART for NMEA GPS Input
+#ifdef RB_ENABLE_NavCore
+  // NavCore: SC16IS762 on existing I2C bus (GPIO07/15) + IRQ on GPIO19
+  if (!g_navcore_sc_inited)
+  {
+    NavCore_SC16_Init();
+  }
+#else
     const uart_config_t uart_config = {
         .baud_rate = GpsSpeed0ForDisable, // TODO: Delay the setup up to the LVGL started
         .data_bits = UART_DATA_8_BITS,
@@ -1967,6 +2035,7 @@ void uartApplyRates()
     };
     // Setup Baud Rate
     uart_param_config(1, &uart_config);
+#endif
 #endif
   }
   else
@@ -4647,19 +4716,46 @@ static void Onboard_create_Speed(lv_obj_t *parent)
   {
     lv_obj_t *label = lv_label_create(parent);
     lv_obj_set_size(label, 300, 40);
-    lv_obj_align(label, LV_ALIGN_CENTER, 0, 60);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, -35);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     if (isKmh == 1)
     {
+      #if defined(RB_ENABLE_IAS)
+      lv_label_set_text(label, "AIR SPEED KMH");
+      #else
       lv_label_set_text(label, "GPS SPEED KMH");
+      #endif
     }
     else
     {
+      #if defined(RB_ENABLE_IAS)
+      lv_label_set_text(label, "AIR SPEED KT");
+      #else
       lv_label_set_text(label, "GPS SPEED KT");
+      #endif
     }
     lv_obj_add_style(label, &style_title, LV_STATE_DEFAULT);
   }
+#if defined(RB_ENABLE_IAS)
+  if (true)
+  {
+    lv_obj_t *label = lv_label_create(parent);
+    lv_obj_set_size(label, 300, 40);
+    lv_obj_align(label, LV_ALIGN_CENTER, 0, 55);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    if (isKmh == 1)
+    {
+      lv_label_set_text(label, "GPS SPEED");
+    }
+    else
+    {
+      lv_label_set_text(label, "GPS SPEED");
+    }
+    lv_obj_add_style(label, &style_title, LV_STATE_DEFAULT);
+  }
+#endif
 
   uint8_t radius = (460 - 98) / 2;
   uint16_t speedKt = 0;
@@ -4698,6 +4794,8 @@ static void Onboard_create_Speed(lv_obj_t *parent)
   lv_obj_set_size(Screen_Speed_SpeedTick, fi_needle.header.w, fi_needle.header.h);
   lv_obj_align(Screen_Speed_SpeedTick, LV_ALIGN_CENTER, 0, 0);
 
+  if(true){
+  lv_obj_t *Screen_Speed_SpeedText = NULL;
   Screen_Speed_SpeedText = lv_label_create(parent);
   lv_obj_set_size(Screen_Speed_SpeedText, 128, 48);
   lv_obj_align(Screen_Speed_SpeedText, LV_ALIGN_CENTER, 0, 0);
@@ -4709,6 +4807,26 @@ static void Onboard_create_Speed(lv_obj_t *parent)
   char buf[4];
   snprintf(buf, sizeof(buf), "%d", 0);
   lv_label_set_text(Screen_Speed_SpeedText, buf);
+  singletonConfig()->ui.labelGPSSpeed = Screen_Speed_SpeedText;
+  }
+#if defined(RB_ENABLE_IAS)
+  if(true){
+  lv_obj_t *Screen_Speed_SpeedText = NULL;
+  Screen_Speed_SpeedText = lv_label_create(parent);
+  lv_obj_set_size(Screen_Speed_SpeedText, 128, 48);
+  lv_obj_align(Screen_Speed_SpeedText, LV_ALIGN_CENTER, 0, 80);
+  lv_obj_set_style_text_align(Screen_Speed_SpeedText, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_font(Screen_Speed_SpeedText, &lv_font_montserrat_48, 0);
+  lv_obj_set_style_text_color(Screen_Speed_SpeedText, lv_color_white(), 0);
+  lv_obj_set_style_bg_color(Screen_Speed_SpeedText, lv_color_black(), 0);
+  lv_obj_set_style_radius(Screen_Speed_SpeedText, LV_RADIUS_CIRCLE, 0);
+  char buf[4];
+  snprintf(buf, sizeof(buf), "%d", 0);
+  lv_label_set_text(Screen_Speed_SpeedText, buf);
+  singletonConfig()->ui.labelIASSpeed = singletonConfig()->ui.labelGPSSpeed;
+  singletonConfig()->ui.labelGPSSpeed = Screen_Speed_SpeedText;
+  }
+#endif
 
   lv_obj_add_event_cb(parent, speedBgClicked, LV_EVENT_CLICKED, NULL);
 }

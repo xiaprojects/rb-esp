@@ -27,4 +27,10 @@ extern SemaphoreHandle_t sem_vsync_end;
 extern SemaphoreHandle_t sem_gui_ready;
 #endif
 #endif
+
+#if RB_02_DISPLAY_SIZE == RB_02_DISPLAY_17
+// ESP32-S3-Touch-AMOLED-1.75
+#include "SH8691_17.h"
+#endif
+
 #endif
