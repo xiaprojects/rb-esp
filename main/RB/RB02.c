@@ -56,14 +56,14 @@
  * - ESP32-S3 2.8" Inch Round display 480x480 TOUCH
  * - https://www.waveshare.com/esp32-s3-touch-lcd-2.8c.htm
  */
- /*void DidYouJoinedDiscord()
+void DidYouJoinedDiscord()
 {
 
   if (youAreThere == true)
   {
     MeansYouShallUseThePreBuildReleasedAndJoinDiscord();
   }
-}*/
+}
 
 #include "RB02.h"
 #include "RB02_GUIHelpers.h"
