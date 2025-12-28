@@ -41,4 +41,5 @@ The source code should only be used as an example for those who have the skills 
 To support you, we've created a community on Discord. Join us and learn how the devices work.
 We thank you for your support and sponsorship.
  */
-#error You shall not compile yourself, please use the official releases and join the discord community
+
+// #error You shall not compile yourself, please use the official releases and join the discord community

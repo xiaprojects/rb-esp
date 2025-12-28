@@ -56,14 +56,14 @@
  * - ESP32-S3 2.8" Inch Round display 480x480 TOUCH
  * - https://www.waveshare.com/esp32-s3-touch-lcd-2.8c.htm
  */
- void DidYouJoinedDiscord()
+ /*void DidYouJoinedDiscord()
 {
 
   if (youAreThere == true)
   {
     MeansYouShallUseThePreBuildReleasedAndJoinDiscord();
   }
-}
+}*/
 
 #include "RB02.h"
 #include "RB02_GUIHelpers.h"
@@ -150,16 +150,8 @@
 
 #ifdef RB_ENABLE_NavCore
 #include "RB02_NavCore.h"
-#include "ms4525do_rb.h"
-int32_t NavCore_GetEncoderDelta(void);
-bool NavCore_GetAndClearSwitchPressed(void);
 #endif
 
-#ifdef RB_ENABLE_NavCore
-#include "sc16is750.h"
-#include "driver/gpio.h"
-#include "freertos/stream_buffer.h"
-#endif
 #include "PCF85063.h"
 #include "RB02_SDCardInject.c"
 
@@ -1087,13 +1079,17 @@ void uart_fetch_data()
 {
   if (GpsSpeed0ForDisable == 0)
     return;
-
 #ifdef RB_ENABLE_NavCore
   // In NavCore mode, SC16IS IRQ task fills a stream buffer. We only drain it here and parse NMEA
   // from the main context (safer for LVGL/UI code paths).
   static uint8_t data[UART_RX_BUF_SIZE + 1];
 
-  size_t rxBytes = xStreamBufferReceive(g_navcore_gps_sb, data, UART_RX_BUF_SIZE, 0);
+  //size_t rxBytes = xStreamBufferReceive(g_navcore_gps_sb, data, UART_RX_BUF_SIZE, 0);
+  StreamBufferHandle_t sb = rb_navcore_gps_stream();
+  size_t rxBytes = 0;
+  if (sb) {
+    rxBytes = xStreamBufferReceive(sb, data, UART_RX_BUF_SIZE, 0);
+  }
   if (rxBytes > 0)
   {
     data[rxBytes] = 0;
@@ -1965,7 +1961,7 @@ void update_Speed_lvgl_tick(lv_timer_t *t)
     lv_label_set_text(singletonConfig()->ui.labelGPSSpeed, buf);
 
 #if defined(RB_ENABLE_IAS)
-    snprintf(buf, sizeof(buf), "%.0f", (float)speed / isKt); // KT
+    snprintf(buf, sizeof(buf), "%.0f", (float)speed / 10 / isKt); // KT
     lv_label_set_text(singletonConfig()->ui.labelIASSpeed, buf);
 #endif
   }
@@ -2019,11 +2015,7 @@ void uartApplyRates()
   {
 #ifdef RB_ENABLE_UART
 #ifdef RB_ENABLE_NavCore
-  // NavCore: SC16IS762 on existing I2C bus (GPIO07/15) + IRQ on GPIO19
-  if (!g_navcore_sc_inited)
-  {
-    NavCore_SC16_Init();
-  }
+    rb_navcore_init();
 #else
     const uart_config_t uart_config = {
         .baud_rate = GpsSpeed0ForDisable, // TODO: Delay the setup up to the LVGL started
@@ -3294,6 +3286,59 @@ static void speedBgClicked(lv_event_t *event)
     nvsStoreDefaultScreenOrDemo();
   }
 }
+
+#ifdef RB_ENABLE_NavCore
+void RB02_NavCore_InjectTouch(uint8_t touch_loc)
+{
+  // Same protections as speedBgClicked
+  if (mbox1 != NULL)
+    return;
+
+  if (tv == NULL)
+    return;
+
+  bool changedTab = false;
+  lv_tabview_t *tabview = (lv_tabview_t *)tv;
+  uint16_t cur = tabview->tab_cur;
+
+  // Reproduce the "global" W/E tab switching behavior from speedBgClicked()
+  switch (touch_loc)
+  {
+    case RB02_TOUCHLOC_W:
+      if (cur > 0)
+      {
+        cur--;
+        changedTab = true;
+      }
+      break;
+
+    case RB02_TOUCHLOC_E:
+      cur++;
+      changedTab = true;
+      if (cur >= RB02_TAB_DEV)
+      {
+        cur = RB02_TAB_SET;
+      }
+      break;
+
+    default:
+      // For N/S/CENTER etc, reuse RB02 dispatching
+      actionInTab((touchLocation)touch_loc);
+      break;
+  }
+
+  if (changedTab)
+  {
+    lv_tabview_set_act(tv, cur, LV_ANIM_OFF);
+
+    if (DeviceIsDemoMode == 0)
+    {
+      nvsStoreDefaultScreenOrDemo();
+    }
+  }
+}
+#endif
+
 
 static lv_obj_t *Onboard_create_Base(lv_obj_t *parent, const lv_img_dsc_t *backgroundImageName)
 {
