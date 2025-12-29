@@ -174,7 +174,7 @@
 
 #ifdef RB_ENABLE_NavCore
 #define RB_ENABLE_IAS 1
-#define RB_ENABLE_KNOB 1
+#define RB02_BUTTON_KNOB        2
 #define RB_ENABLE_MODBUS 1
 #define RB_ENABLE_CAN 1
 //#define RB_ENABLE_BMI270 1

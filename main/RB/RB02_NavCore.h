@@ -27,8 +27,9 @@
  * Dual licensing for commercial agreement is available
  *
 */
-
 #pragma once
+#include "RB02_Defines.h"
+#ifdef RB_ENABLE_NavCore
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -38,10 +39,8 @@
 #include "driver/gpio.h"
 #include "freertos/stream_buffer.h"
 #include "driver/uart.h"
-#include "RB02_Defines.h"
 #include "RB02_GUIHelpers.h"
 #include "ms4525do_rb.h"
-#include "BuildMachine.h"
 
 /*
  * @file navcore.h
@@ -326,4 +325,5 @@ void navcore_ec11_debug_dump(const navcore_ec11_t *e);
 
 #ifdef __cplusplus
 } // extern "C"
+#endif
 #endif

@@ -262,87 +262,6 @@ void disableTVScroll();
 void example1_BMP280_lvgl_tick(lv_timer_t *t);
 // Variables
 
-typedef enum
-{
-  RB02_TOUCH_NW,
-  RB02_TOUCH_N,
-  RB02_TOUCH_NE,
-  RB02_TOUCH_W,
-  RB02_TOUCH_CENTER,
-  RB02_TOUCH_E,
-  RB02_TOUCH_SW,
-  RB02_TOUCH_S,
-  RB02_TOUCH_SE,
-  RB02_TOUCH_UNKNOWN
-} touchLocation;
-
-typedef enum
-{
-#ifdef ENABLE_VENDOR
-  RB02_TAB_SPL,
-#endif
-#ifdef RB_ENABLE_EMS
-  RB02_TAB_EMS,
-#endif
-#ifdef ENABLE_DEMO_SCREENS
-  RB02_TAB_SYS,
-  RB02_TAB_SYN,
-// RB02_TAB_HSI,
-#endif
-#ifdef RB_ENABLE_SPD
-  RB02_TAB_SPD,
-#endif
-#ifdef RB_ENABLE_ATT
-  RB02_TAB_ATT,
-#endif
-#ifdef RB_ENABLE_AAT
-  RB02_TAB_AAT,
-#endif
-#ifdef RB_ENABLE_ALT
-  RB02_TAB_ALT,
-#endif
-#ifdef RB_ENABLE_ALD
-  RB02_TAB_ALD,
-#endif
-#ifdef RB_ENABLE_TRN
-  RB02_TAB_TRN,
-#endif
-#ifdef RB_ENABLE_GPS
-#ifdef RB_ENABLE_TRK
-  RB02_TAB_TRK,
-#endif
-#ifdef RB_ENABLE_MAP
-  RB02_TAB_MAP,
-#endif
-#endif
-#ifdef RB_ENABLE_VAR
-  RB02_TAB_VAR,
-#endif
-#ifdef RB_ENABLE_GMT
-  RB02_TAB_GMT,
-#endif
-#ifdef RB_ENABLE_CLK
-  RB02_TAB_CLK,
-#endif
-#ifdef RB_ENABLE_CHECKLIST
-  RB02_TAB_CHK,
-#endif
-#ifdef RB_ENABLE_TRAFFIC
-  RB02_TAB_RDR,
-  RB02_TAB_TRA,
-#endif
-  RB02_TAB_SET,
-#ifdef VIBRATION_TEST
-  RB02_TAB_VBR,
-#endif
-#ifdef RB_ENABLE_GPS_DIAG
-  RB02_TAB_GDG,
-#endif
-#ifdef RB_ENABLE_CONSOLE
-  RB02_TAB_COS,
-#endif
-  RB02_TAB_DEV
-} tabs;
 
 // 1.1.6 Red X
 uint8_t Operative_GPS = 0;
@@ -1079,13 +998,13 @@ void uart_fetch_data()
 {
   if (GpsSpeed0ForDisable == 0)
     return;
+
 #ifdef RB_ENABLE_NavCore
   // In NavCore mode, SC16IS IRQ task fills a stream buffer. We only drain it here and parse NMEA
   // from the main context (safer for LVGL/UI code paths).
   static uint8_t data[UART_RX_BUF_SIZE + 1];
 
-  //size_t rxBytes = xStreamBufferReceive(g_navcore_gps_sb, data, UART_RX_BUF_SIZE, 0);
-  StreamBufferHandle_t sb = rb_navcore_gps_stream();
+   StreamBufferHandle_t sb = rb_navcore_gps_stream();
   size_t rxBytes = 0;
   if (sb) {
     rxBytes = xStreamBufferReceive(sb, data, UART_RX_BUF_SIZE, 0);
@@ -1899,9 +1818,7 @@ void update_Speed_lvgl_tick(lv_timer_t *t)
 
   // First we go for GPS
 #ifdef RB_ENABLE_GPS
-  int Gpsspeed = 0;
   speed = singletonConfig()->NMEA_DATA.speed * 10;
-  Gpsspeed = speed;
 #endif
 
 // We are using the NavCore define because it is already "protected by IAS"
@@ -2994,7 +2911,8 @@ static void RB02_AltimeterQNHUpdated()
   Variometer = 0;
 }
 
-static void actionInTab(touchLocation location)
+// TODO: Move to RB02_Navigator.c
+void actionInTab(touchLocation location)
 {
 
   // 1.1.25 Request to go to the default screen
@@ -3286,59 +3204,6 @@ static void speedBgClicked(lv_event_t *event)
     nvsStoreDefaultScreenOrDemo();
   }
 }
-
-#ifdef RB_ENABLE_NavCore
-void RB02_NavCore_InjectTouch(uint8_t touch_loc)
-{
-  // Same protections as speedBgClicked
-  if (mbox1 != NULL)
-    return;
-
-  if (tv == NULL)
-    return;
-
-  bool changedTab = false;
-  lv_tabview_t *tabview = (lv_tabview_t *)tv;
-  uint16_t cur = tabview->tab_cur;
-
-  // Reproduce the "global" W/E tab switching behavior from speedBgClicked()
-  switch (touch_loc)
-  {
-    case RB02_TOUCHLOC_W:
-      if (cur > 0)
-      {
-        cur--;
-        changedTab = true;
-      }
-      break;
-
-    case RB02_TOUCHLOC_E:
-      cur++;
-      changedTab = true;
-      if (cur >= RB02_TAB_DEV)
-      {
-        cur = RB02_TAB_SET;
-      }
-      break;
-
-    default:
-      // For N/S/CENTER etc, reuse RB02 dispatching
-      actionInTab((touchLocation)touch_loc);
-      break;
-  }
-
-  if (changedTab)
-  {
-    lv_tabview_set_act(tv, cur, LV_ANIM_OFF);
-
-    if (DeviceIsDemoMode == 0)
-    {
-      nvsStoreDefaultScreenOrDemo();
-    }
-  }
-}
-#endif
-
 
 static lv_obj_t *Onboard_create_Base(lv_obj_t *parent, const lv_img_dsc_t *backgroundImageName)
 {

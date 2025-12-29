@@ -34,6 +34,7 @@
 */
 
 #include "RB02_NavCore.h"
+#ifdef RB_ENABLE_NavCore
 #include "RB02.h"
 
 
@@ -374,7 +375,7 @@ save_and_out:
 }
 
 
-
+#ifdef RB02_BUTTON_KNOB
 // --------------------
 // Console/UI polling task
 // (already exists in your file; now drains the queue and prints the 10 events)
@@ -460,7 +461,7 @@ void navcore_ui_poll_ec11(void)
 
   if (ev == 0) return;
 }
-
+#endif
 // --------------------
 // SC16 IRQ ISR + SC16 worker task
 // - Inchangé sur le fond: UART A + UART B drainés comme avant
@@ -591,8 +592,9 @@ void rb_navcore_init(void)
     xTaskCreate(NavCore_SC16_Task, "navcore_sc16", 4096, NULL, 10, &g_navcore_task);
 
     // Debug/console task (prints)
+#ifdef RB02_BUTTON_KNOB
     xTaskCreate(NavCore_UI_Task, "ec11_dbg", 3072, NULL, 5, &g_navcore_ui_task);
-
+#endif
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << RB_NAVCORE_SC16_IRQ_GPIO),
         .mode = GPIO_MODE_INPUT,
@@ -632,3 +634,5 @@ void navcore_ec11_debug_dump(const navcore_ec11_t *e)
     (void)e;
 #endif
 }
+
+#endif
