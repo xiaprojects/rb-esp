@@ -7,7 +7,11 @@
 #include "demos/lv_demos.h"
 
 #include "ST7701S.h"
+#if RB_02_DISPLAY_SIZE ==  RB_02_DISPLAY_2834
+#include "CST328.h"
+#else
 #include "GT911.h"
+#endif
 
 /**
  * LVGL related parameters, can be adjusted by users

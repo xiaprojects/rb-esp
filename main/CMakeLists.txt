@@ -43,6 +43,7 @@ idf_component_register(
 
                         INCLUDE_DIRS "./EXIO"
                                      "./LCD_Driver"
+                                     "./LCD_Driver/Vernon_ST7789T"
                                      "./Touch_Driver" 
                                      "./Touch_Driver/esp_lcd_touch"  
                                      "./LVGL_Driver"

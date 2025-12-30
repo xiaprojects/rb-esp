@@ -2,6 +2,7 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "LVGL_Driver.h"
+#include "esp_lcd_panel_rgb.h"
 
 static const char *TAG = "LVGL";                      // Tag for logging
 static SemaphoreHandle_t lvgl_mux;                       // LVGL mutex for synchronization
@@ -353,13 +354,13 @@ void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color
 }
 
 #endif /* LVGL_PORT_AVOID_TEAR_ENABLE */
+lv_disp_drv_t disp_drv = { 0 };          // Contains LCD panel handle and callback functions
 
 static lv_disp_t *display_init(esp_lcd_panel_handle_t panel_handle)
 {
     assert(panel_handle); // Ensure the panel handle is valid
 
     static lv_disp_draw_buf_t disp_buf = { 0 };     // Contains internal graphic buffer(s) called draw buffer(s)
-    static lv_disp_drv_t disp_drv = { 0 };          // Contains LCD panel handle and callback functions
 
     // Allocate draw buffers used by LVGL
     void *buf1 = NULL; // Pointer for the first buffer

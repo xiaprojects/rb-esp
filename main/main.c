@@ -32,11 +32,12 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "RB/RB02_Defines.h"
 #include "TCA9554PWR.h"
 #include "PCF85063.h"
 #include "QMI8658.h"
 #include "ST7701S.h"
-#include "RB02.h"
+
 #if RB_02_DISPLAY_SIZE == RB_02_DISPLAY_17
 // ESP32-S3-Touch-AMOLED-1.75
 #ifdef RB_02_DISPLAY_TOUCH
