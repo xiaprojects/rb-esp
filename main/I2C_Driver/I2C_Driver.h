@@ -35,7 +35,7 @@
 #include "esp_log.h"
 #include "driver/gpio.h"
 #include "driver/i2c.h"
-
+#include "../RB/RB02_Defines.h"
 
 /********************* I2C *********************/
 #if RB_02_DISPLAY_SIZE ==  RB_02_DISPLAY_2834
