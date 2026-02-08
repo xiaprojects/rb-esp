@@ -450,7 +450,12 @@ void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *g
     if (aaStatus->QNH != QNH)
     {
         aaStatus->QNH = QNH;
+        if(singletonConfig()->qnhIsInInches){
+            float QNHInInches = QNH / 33.8639;
+            snprintf(buf, sizeof(buf), "%.2f", QNHInInches);
+        } else {
         snprintf(buf, sizeof(buf), "%ld", QNH);
+        }
         lv_label_set_text(aaStatus->lv_qnh, buf);
     }
 

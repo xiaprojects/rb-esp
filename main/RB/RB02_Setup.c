@@ -29,6 +29,7 @@
 #include "RB02_Console.h"
 #ifdef RB_ENABLE_SETUP
 #include <stdio.h>
+#include "nvs_flash.h"
 
 #ifdef RB02_ESP_BLUETOOTH
 static void RB02_Setup_Changed_EnableBluetooth(lv_event_t *e)
@@ -107,6 +108,76 @@ static void PanelMountYawChanged(lv_event_t *e)
   lv_label_set_text(singletonConfig()->ui.panelMountAlignmentLabelYaw, buf);
 
   nvsStoreGyroCalibration();
+}
+
+
+void nvsStoreQNHInches(uint8_t isInches)
+{
+  //
+  nvs_handle_t my_handle;
+  esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
+  if (err != ESP_OK)
+  {
+    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+  }
+  else
+  {
+    // Read
+    err = nvs_set_u8(my_handle, "qnhInches", isInches);
+    nvs_close(my_handle);
+  }
+}
+
+
+static void QNHIsInInches(lv_event_t *e)
+{
+  lv_obj_t *sw = (lv_obj_t *)lv_event_get_user_data(e);
+  if (lv_obj_get_state(sw) & LV_STATE_CHECKED)
+  {
+    singletonConfig()->qnhIsInInches = 1;
+  }
+  else
+  {
+    singletonConfig()->qnhIsInInches = 0;
+  }
+    nvsStoreQNHInches(singletonConfig()->qnhIsInInches);
+}
+
+void nvsStoreBMPAddress(uint8_t address)
+{
+  //
+  nvs_handle_t my_handle;
+  esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
+  if (err != ESP_OK)
+  {
+    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+  }
+  else
+  {
+    // Read
+    err = nvs_set_u8(my_handle, "bmp280Address", address);
+    nvs_close(my_handle);
+  }
+}
+
+
+
+static void event_handler_set_bmp_280_76(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_CLICKED)
+  {
+    nvsStoreBMPAddress(0x76);
+  }
+}
+
+static void event_handler_set_bmp_280_77(lv_event_t *e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  if (code == LV_EVENT_CLICKED)
+  {
+    nvsStoreBMPAddress(0x77);
+  }
 }
 
 
@@ -342,6 +413,49 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     *lineY += 70;
   }
 
+
+  if (true)
+  {
+    lv_obj_t *btn1 = lv_btn_create(parent);
+    lv_obj_add_event_cb(btn1, event_handler_set_bmp_280_76, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn1, LV_ALIGN_CENTER, 0, *lineY);
+
+    lv_obj_t *label = lv_label_create(btn1);
+    lv_label_set_text(label, "SET BMP280 ADDRESS 0x76");
+    lv_obj_center(label);
+    *lineY += 60;
+  }
+
+  if (true)
+  {
+    lv_obj_t *btn1 = lv_btn_create(parent);
+    lv_obj_add_event_cb(btn1, event_handler_set_bmp_280_77, LV_EVENT_ALL, NULL);
+    lv_obj_align(btn1, LV_ALIGN_CENTER, 0, *lineY);
+
+    lv_obj_t *label = lv_label_create(btn1);
+    lv_label_set_text(label, "SET BMP280 ADDRESS 0x77");
+    lv_obj_center(label);
+    *lineY += 60;
+  }
+
+  if (true)
+  {
+    lv_obj_t *DisableFilteringLabel = lv_label_create(parent);
+    lv_obj_set_size(DisableFilteringLabel, 150, 16);
+    lv_obj_align(DisableFilteringLabel, LV_ALIGN_CENTER, -75, *lineY);
+    lv_obj_set_style_text_align(DisableFilteringLabel, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_font(DisableFilteringLabel, &lv_font_montserrat_16, 0);
+    lv_label_set_text(DisableFilteringLabel, "QNH InHg");
+    lv_obj_t *sw = lv_switch_create(parent);
+    if (singletonConfig()->qnhIsInInches != 0)
+    {
+      lv_obj_add_state(sw, LV_STATE_CHECKED);
+    }
+    lv_obj_set_size(sw, 65, 40);
+    lv_obj_align(sw, LV_ALIGN_CENTER, 40, *lineY);
+    lv_obj_add_event_cb(sw, QNHIsInInches, LV_EVENT_VALUE_CHANGED, sw);
+    *lineY += 40;
+  }
 
   return NULL;
 }

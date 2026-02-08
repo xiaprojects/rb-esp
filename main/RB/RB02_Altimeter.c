@@ -85,11 +85,16 @@ lv_obj_t *RB02_Altimeter_CreateScreen(lv_obj_t *parent)
     if (parent != NULL && Screen_Altitude_QNH == NULL)
     {
         Screen_Altitude_QNH = lv_label_create(parent);
-        lv_obj_set_size(Screen_Altitude_QNH, 128, 48);
-        lv_obj_align(Screen_Altitude_QNH, LV_ALIGN_CENTER, 172, 0);
+        lv_obj_set_size(Screen_Altitude_QNH, 150, 48);
+        lv_obj_align(Screen_Altitude_QNH, LV_ALIGN_CENTER, 155, 0);
         lv_obj_set_style_text_font(Screen_Altitude_QNH, &lv_font_montserrat_48, 0);
         char buf[6];
+        if(singletonConfig()->qnhIsInInches){
+            float QNHInInches = QNH / 33.8639;
+            snprintf(buf, sizeof(buf), "%.2f", QNHInInches);
+        } else {
         snprintf(buf, sizeof(buf), "%03u", QNH);
+        }
         lv_label_set_text(Screen_Altitude_QNH, buf);
     }
 
