@@ -22,6 +22,8 @@
  * 04 -> Display with EMS: Engine monitoring system
  * 05 -> Display with Stratux BLE Traffic
  * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+ * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  *
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available
@@ -597,7 +599,7 @@ void RB02_Example1(void)
 
   // BMP280
   uint8_t bmp280BufferReset[1] = {0xB6};
-  I2C_Write(0x76, 0xE0, &bmp280BufferReset[0], 1);
+  I2C_Write(singletonConfig()->bmp280Address, 0xE0, &bmp280BufferReset[0], 1);
 
   // 1.1.5 Added Vendor Splashscreen
 #ifndef ENABLE_VENDOR
@@ -1186,6 +1188,7 @@ void nvsRestoreGMeter()
   }
 }
 
+#define BMP280_DEFAULT_76 0x76
 
 void nvsRestoreSettings()
 {
@@ -1345,9 +1348,25 @@ void nvsRestoreSettings()
     singletonConfig()->settingsBluetoothGPS = settingsBluetoothEnabled;
 
 #endif
+
+    uint8_t bmp280Address = 0;
+    nvs_get_u8(my_handle, "bmp280Address", &bmp280Address);
+    if (bmp280Address != 0)
+    {
+      singletonConfig()->bmp280Address = bmp280Address;
+    } else {
+      singletonConfig()->bmp280Address = BMP280_DEFAULT_76; // Default address if not set
+    }
+
+
+    singletonConfig()->qnhIsInInches = 0;
+    nvs_get_u8(my_handle, "qnhInches", &singletonConfig()->qnhIsInInches);
+
     nvs_close(my_handle);
   }
 }
+
+
 
 void nvsStoreSpeedArc()
 {
@@ -1757,7 +1776,7 @@ uint32_t pressureCompensation(int32_t adc_P)
 void example1_BMP280_lvgl_tick(lv_timer_t *t)
 {
   uint8_t buf[6] = {0, 0, 0, 0, 0, 0};
-  I2C_Read(0x76, 0xF7, &buf[0], 6);
+  I2C_Read(singletonConfig()->bmp280Address, 0xF7, &buf[0], 6);
 
   int32_t adc_t = ((buf[3] << 12) | (buf[4] << 4) | (buf[5] >> 4));
   int32_t adc_p = ((buf[0] << 12) | (buf[1] << 4) | (buf[2] >> 4));
@@ -1956,14 +1975,14 @@ void bmp280Setup()
 {
   uint8_t bmp280Control[1] = {0x57};
   uint8_t bmp280Settings[1] = {0x9C};
-  I2C_Write(0x76, 0xF4, &bmp280Control[0], 1);
-  I2C_Write(0x76, 0xF5, &bmp280Settings[0], 1);
+  I2C_Write(singletonConfig()->bmp280Address, 0xF4, &bmp280Control[0], 1);
+  I2C_Write(singletonConfig()->bmp280Address, 0xF5, &bmp280Settings[0], 1);
 }
 
 void readCalibration()
 {
   uint8_t buf[24] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  I2C_Read(0x76, 0x88, &buf[0], 24);
+  I2C_Read(singletonConfig()->bmp280Address, 0x88, &buf[0], 24);
   /* Endianess. */
 #ifdef RB_ENABLE_CONSOLE_DEBUG
   printf("Calibration: ");
@@ -2895,7 +2914,12 @@ void lv_timer_restart_msgbox(void)
 static void RB02_AltimeterQNHUpdated()
 {
   char buf[25];
+  if(singletonConfig()->qnhIsInInches){
+      float QNHInInches = QNH / 33.8639;
+      snprintf(buf, sizeof(buf), "%.2f", QNHInInches);
+  } else {
   snprintf(buf, sizeof(buf), "%03u", QNH);
+  }
 #ifdef RB_ENABLE_ALT
   lv_label_set_text(Screen_Altitude_QNH, buf);
 #endif
