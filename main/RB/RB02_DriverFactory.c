@@ -49,7 +49,7 @@
 #endif
 #ifdef RB_ENABLE_IAS
 #endif
-#ifdef RB_ENABLE_KNOB
+#ifdef RB02_BUTTON_KNOB
 #endif
 #ifdef RB_ENABLE_MODBUS
 #endif
