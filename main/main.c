@@ -82,9 +82,8 @@ void Driver_Loop(void *parameter)
     int loopThreshold = 10; // Delay the polling of certain sensors
     while (1)
     {
-#if RB_PRODUCT_LINE == 2
+        // TODO: optimise the code
         Driver_Attitude_Loop();
-#endif
         // Delay the polling of certain sensors
         if (loopThreshold == 0)
         {

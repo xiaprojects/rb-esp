@@ -163,10 +163,11 @@
 #endif
 #endif
 
-#if RB_PRODUCT_LINE == 2
+// TODO: optimise the code
+//#if RB_PRODUCT_LINE == 2
 #define RB_ENABLE_BMP280 1
 #define RB_ENABLE_QMI8658 1
-#endif
+//#endif
 
 #ifdef RB_ENABLE_BME680
 #include "BME680.h"
