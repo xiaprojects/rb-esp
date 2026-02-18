@@ -34,8 +34,7 @@
 #include "freertos/semphr.h"
 #include "RB/RB02_Defines.h"
 #include "TCA9554PWR.h"
-#include "PCF85063.h"
-#include "QMI8658.h"
+#include "RB02_DriverFactory.h"
 #include "ST7701S.h"
 
 #if RB_02_DISPLAY_SIZE == RB_02_DISPLAY_17
@@ -139,7 +138,12 @@ void Driver_Init(void)
     i2c_scan();
     vTaskDelay(pdMS_TO_TICKS(100));
 #endif
+
+#ifdef RB_ENABLE_PCF85063
     PCF85063_Init();
+#else
+
+#endif
     EXIO_Init(); // Example Initialize EXIO
 /*
     // Keep the LCD under reset after Expander has being init

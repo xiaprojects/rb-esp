@@ -58,6 +58,7 @@
  * - ESP32-S3 2.8" Inch Round display 480x480 TOUCH
  * - https://www.waveshare.com/esp32-s3-touch-lcd-2.8c.htm
  */
+
 void DidYouJoinedDiscord()
 {
 
@@ -69,6 +70,7 @@ void DidYouJoinedDiscord()
 
 #include "RB02.h"
 #include "RB02_GUIHelpers.h"
+#include "RB02_DriverFactory.h"
 
 // Images pre-loaded
 #ifdef ENABLE_DEMO_SCREENS
@@ -147,7 +149,6 @@ void DidYouJoinedDiscord()
 #include "nvs_flash.h"
 #include "esp_mac.h"
 #include "esp_sleep.h"
-#include "QMI8658.h"
 #include "driver/uart.h"
 
 #ifdef RB_ENABLE_NavCore
@@ -217,9 +218,7 @@ extern IMUdata PanelAlignment;
 #define DIGIT_BIG_SEGMENTS 7
 #define DIGIT_BIG_DIGIT 4
 #define DIGIT_MINOR_DIGIT 2
-#define BMP280_S64_t int64_t
-#define BMP280_U32_t uint32_t
-#define BMP280_S32_t int32_t
+
 
 // Prototype declaration
 void lvgl_register_sdcard_fs();
@@ -335,12 +334,14 @@ lv_obj_t *Screen_Speed_SpeedTick = NULL;
 lv_obj_t *Screen_GMeter_Ball = NULL;
 lv_obj_t *Screen_GMeter_BallMax = NULL;
 #ifdef VIBRATION_TEST
+#ifdef RB_ENABLE_QMI8658
 extern acc_scale_t acc_scale;
 extern gyro_scale_t gyro_scale;
 extern acc_odr_t acc_odr;
 extern gyro_odr_t gyro_odr;
 extern lpf_t acc_lpf;
 extern lpf_t gyro_lpf;
+#endif
 lv_obj_t *Screen_GMeter_BallGyro = NULL;
 lv_obj_t *GMeterLabelGyro = NULL;
 lv_obj_t *Screen_Vibration_Accel_Ball = NULL;
@@ -385,9 +386,6 @@ lv_obj_t *t_speedYellow = NULL;
 lv_obj_t *t_speedRed = NULL;
 uint64_t _chipmacid = 0LL;
 uint8_t workflow = 0;
-
-int32_t bmp280Calibration[12];
-BMP280_S32_t t_fine = 0;
 lv_obj_t *bmp280overrideLabel = NULL;
 lv_obj_t *SegmentsA[DIGIT_BIG_DIGIT][DIGIT_BIG_SEGMENTS];
 lv_obj_t *SegmentsAltDigit[5][DIGIT_BIG_SEGMENTS];
@@ -597,9 +595,7 @@ void RB02_Example1(void)
 #else
 #endif
 
-  // BMP280
-  uint8_t bmp280BufferReset[1] = {0xB6};
-  I2C_Write(singletonConfig()->bmp280Address, 0xE0, &bmp280BufferReset[0], 1);
+  Barometer_Init();
 
   // 1.1.5 Added Vendor Splashscreen
 #ifndef ENABLE_VENDOR
@@ -1188,7 +1184,6 @@ void nvsRestoreGMeter()
   }
 }
 
-#define BMP280_DEFAULT_76 0x76
 
 void nvsRestoreSettings()
 {
@@ -1673,160 +1668,6 @@ int32_t bmp280Pressure = 0;
 int32_t bmp280Temperature = 0;
 int32_t Altimeter = 0;
 int32_t Variometer = 0;
-int32_t pressureCompensation2(int32_t adc_T, int32_t adc_P)
-{
-  int32_t var1t, var2t;
-  int32_t t_fine;
-  adc_T >>= 4;
-
-  var1t = ((((adc_T >> 3) - ((int32_t)bmp280Calibration[0] << 1))) *
-           ((int32_t)bmp280Calibration[1])) >>
-          11;
-
-  var2t = (((((adc_T >> 4) - ((int32_t)bmp280Calibration[0])) *
-             ((adc_T >> 4) - ((int32_t)bmp280Calibration[0]))) >>
-            12) *
-           ((int32_t)bmp280Calibration[2])) >>
-          14;
-
-  t_fine = var1t + var2t;
-
-  float T = (t_fine * 5 + 128) >> 8;
-
-  bmp280Temperature = T / 100;
-
-  int64_t var1p, var2p, p;
-
-  adc_P >>= 4;
-
-  var1p = ((int64_t)t_fine) - 128000;
-  var2p = var1p * var1p * (int64_t)bmp280Calibration[8];
-  var2p = var2p + ((var1p * (int64_t)bmp280Calibration[7]) << 17);
-  var2p = var2p + (((int64_t)bmp280Calibration[6]) << 35);
-  var1p = ((var1p * var1p * (int64_t)bmp280Calibration[5]) >> 8) +
-          ((var1p * (int64_t)bmp280Calibration[4]) << 12);
-  var1p =
-      (((((int64_t)1) << 47) + var1p)) * ((int64_t)bmp280Calibration[3]) >> 33;
-
-  if (var1p == 0)
-  {
-    return 0; // avoid exception caused by division by zero
-  }
-  p = 1048576 - adc_P;
-  p = (((p << 31) - var2p) * 3125) / var1p;
-  var1p = (((int64_t)bmp280Calibration[11]) * (p >> 13) * (p >> 13)) >> 25;
-  var2p = (((int64_t)bmp280Calibration[10]) * p) >> 19;
-
-  p = ((p + var1p + var2p) >> 8) + (((int64_t)bmp280Calibration[9]) << 4);
-  bmp280Pressure = singletonConfig()->bmp280override + (float)(p / 256.0);
-  return bmp280Pressure;
-}
-
-int32_t temperatureCompensation(int32_t adc_T)
-{
-  BMP280_S32_t var1, var2, T;
-  BMP280_S32_t dig_T1 = bmp280Calibration[0];
-  BMP280_S32_t dig_T2 = bmp280Calibration[1];
-  BMP280_S32_t dig_T3 = bmp280Calibration[2];
-
-  var1 = ((((adc_T >> 3) - (dig_T1 << 1))) * ((BMP280_S32_t)dig_T2)) >> 11;
-  var2 = (((((adc_T >> 4) - ((BMP280_S32_t)dig_T1)) * ((adc_T >> 4) - ((BMP280_S32_t)dig_T1))) >> 12) *
-          ((BMP280_S32_t)dig_T3)) >>
-         14;
-  t_fine = var1 + var2;
-  T = (t_fine * 5 + 128) >> 8;
-
-  bmp280Temperature = T;
-  return T;
-}
-
-uint32_t pressureCompensation(int32_t adc_P)
-{
-
-  BMP280_S32_t dig_P1 = bmp280Calibration[3];
-  BMP280_S32_t dig_P2 = bmp280Calibration[4];
-  BMP280_S32_t dig_P3 = bmp280Calibration[5];
-  BMP280_S32_t dig_P4 = bmp280Calibration[6];
-  BMP280_S32_t dig_P5 = bmp280Calibration[7];
-  BMP280_S32_t dig_P6 = bmp280Calibration[8];
-  BMP280_S32_t dig_P7 = bmp280Calibration[9];
-  BMP280_S32_t dig_P8 = bmp280Calibration[10];
-  BMP280_S32_t dig_P9 = bmp280Calibration[11];
-
-  BMP280_S64_t var1, var2, p;
-  var1 = ((BMP280_S64_t)t_fine) - 128000;
-  var2 = var1 * var1 * (BMP280_S64_t)dig_P6;
-  var2 = var2 + ((var1 * (BMP280_S64_t)dig_P5) << 17);
-  var2 = var2 + (((BMP280_S64_t)dig_P4) << 35);
-  var1 = ((var1 * var1 * (BMP280_S64_t)dig_P3) >> 8) + ((var1 * (BMP280_S64_t)dig_P2) << 12);
-  var1 = (((((BMP280_S64_t)1) << 47) + var1)) * ((BMP280_S64_t)dig_P1) >> 33;
-  if (var1 == 0)
-  {
-    return 0; // avoid exception caused by division by zero
-  }
-  p = 1048576 - adc_P;
-  p = (((p << 31) - var2) * 3125) / var1;
-  var1 = (((BMP280_S64_t)dig_P9) * (p >> 13) * (p >> 13)) >> 25;
-  var2 = (((BMP280_S64_t)dig_P8) * p) >> 19;
-  p = ((p + var1 + var2) >> 8) + (((BMP280_S64_t)dig_P7) << 4);
-  bmp280Pressure = singletonConfig()->bmp280override + p / 256;
-  return bmp280Pressure;
-}
-
-void example1_BMP280_lvgl_tick(lv_timer_t *t)
-{
-  uint8_t buf[6] = {0, 0, 0, 0, 0, 0};
-  I2C_Read(singletonConfig()->bmp280Address, 0xF7, &buf[0], 6);
-
-  int32_t adc_t = ((buf[3] << 12) | (buf[4] << 4) | (buf[5] >> 4));
-  int32_t adc_p = ((buf[0] << 12) | (buf[1] << 4) | (buf[2] >> 4));
-  temperatureCompensation(adc_t);
-  pressureCompensation(adc_p);
-
-  // Altimeter is *100 feet
-  int32_t AltimeterNew = (((QNH * 100) - bmp280Pressure) * 30.0);
-  // 1.1.6
-  if (AltimeterNew < -100000 || AltimeterNew > 1200000)
-  {
-    Operative_BMP280 = 0;
-  }
-  else
-  {
-    Operative_BMP280 = 1;
-  }
-  // Polling is 1Hz = 0.01 Feet/Second
-  int32_t VariometerInstant = AltimeterNew - Altimeter;
-  // 1.0.9 Variometer is filterd
-  Variometer = (Variometer + VariometerInstant) / 2;
-  Altimeter = AltimeterNew;
-// 1.1.1
-#ifdef RB_ENABLE_CONSOLE_DEBUG
-  printf("BMP280 ");
-  for (int i = 0; i < 6; i++)
-  {
-    printf("%X ", buf[i]);
-  }
-
-  for (int i = 0; i < 12; i++)
-  {
-    printf("%ld ", bmp280Calibration[i]);
-  }
-
-  printf(" Pressure: %lu Temperature: %ld Altimeter: %ld Variometer: %ld Read T: %ld Read P: %ld V: %ld Gy:%.1f %.1f %.1f\n",
-         bmp280Pressure,
-         bmp280Temperature,
-         Altimeter,
-         Variometer,
-         adc_t, adc_p, ((Variometer * 6) * 36 / 400),
-         Gyro.x,
-         Gyro.y,
-         Gyro.z);
-#endif
-}
-void Get_BMP280(void)
-{
-  example1_BMP280_lvgl_tick(NULL);
-}
 #ifdef RB_ENABLE_SPD
 void update_Speed_lvgl_tick(lv_timer_t *t)
 {
@@ -1971,40 +1812,6 @@ void uartApplyRates()
   }
 }
 #endif
-void bmp280Setup()
-{
-  uint8_t bmp280Control[1] = {0x57};
-  uint8_t bmp280Settings[1] = {0x9C};
-  I2C_Write(singletonConfig()->bmp280Address, 0xF4, &bmp280Control[0], 1);
-  I2C_Write(singletonConfig()->bmp280Address, 0xF5, &bmp280Settings[0], 1);
-}
-
-void readCalibration()
-{
-  uint8_t buf[24] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-  I2C_Read(singletonConfig()->bmp280Address, 0x88, &buf[0], 24);
-  /* Endianess. */
-#ifdef RB_ENABLE_CONSOLE_DEBUG
-  printf("Calibration: ");
-#endif
-  for (int i = 0; i < 12; i++)
-  {
-#ifdef RB_ENABLE_CONSOLE_DEBUG
-    printf("%X%X ", buf[2 * i + 1], buf[2 * i]);
-#endif
-    int16_t signedPass = (((buf[2 * i + 1]) << 8) | buf[2 * i]);
-    uint16_t usignedPass = (((buf[2 * i + 1]) << 8) | buf[2 * i]);
-    if (i == 0 || i == 3)
-      bmp280Calibration[i] = usignedPass;
-    else
-      bmp280Calibration[i] = signedPass;
-  }
-#ifdef RB_ENABLE_CONSOLE_DEBUG
-  printf("\n");
-#endif
-  example1_BMP280_lvgl_tick(NULL);
-  Variometer = 0;
-}
 
 void rb_check_attitude_inop()
 {
@@ -2191,10 +1998,10 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
     case 34:
       break;
     case 6:
-      bmp280Setup();
+      Barometer_Setup();
       break;
     case 7:
-      readCalibration();
+      Barometer_ReadCalibration();
       break;
     case 78:
       if (forcedCalibrationOnBoot == true)
@@ -2930,7 +2737,7 @@ static void RB02_AltimeterQNHUpdated()
   snprintf(buf, sizeof(buf), "%+ld", Variometer);
   lv_label_set_text(Screen_Altitude_Variometer2, buf);
 #endif
-  example1_BMP280_lvgl_tick(NULL);
+  Barometer_Update();
   // [ISSUE] with variometer on digital altimeter page #2
   Variometer = 0;
 }
@@ -3328,7 +3135,7 @@ static void AltimeterOverrideChanged(lv_event_t *e)
 #endif
   singletonConfig()->bmp280override = FilterMoltiplierInt - 500;
 
-  example1_BMP280_lvgl_tick(NULL);
+  Barometer_Update();
 
   char buf[50];
   sprintf(buf, "Altimeter QNH: %d mmHg %ld feet (%ld)", (uint16_t)QNH, Altimeter, singletonConfig()->bmp280override);
@@ -4944,17 +4751,6 @@ static void Onboard_create_Variometer(lv_obj_t *parent)
 #endif
 
 #ifdef VIBRATION_TEST
-/*
-extern acc_scale_t acc_scale;
-extern gyro_scale_t gyro_scale;
-extern acc_odr_t acc_odr;
-extern gyro_odr_t gyro_odr;
-extern lpf_t acc_lpf;
-extern lpf_t gyro_lpf;
-
-*/
-
-void QMI8658_Init(void);
 
 static void event_handler_combo_Gyro_Rance(lv_event_t *e)
 {
@@ -4966,6 +4762,7 @@ static void event_handler_combo_Gyro_Rance(lv_event_t *e)
     lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
     LV_LOG_USER("Option: %s", buf);
 
+#ifdef RB_ENABLE_QMI8658
     if (strcmp(buf, "16DPS") == 0)
       gyro_scale = GYR_RANGE_16DPS;
     if (strcmp(buf, "32DPS") == 0)
@@ -4980,8 +4777,11 @@ static void event_handler_combo_Gyro_Rance(lv_event_t *e)
       gyro_scale = GYR_RANGE_512DPS;
     if (strcmp(buf, "1024DPS") == 0)
       gyro_scale = GYR_RANGE_1024DPS;
-
+#endif
+#ifdef RB_ENABLE_QMI8658
     QMI8658_Init();
+#else
+#endif
   }
 }
 static void event_handler_combo_Acc_Rance(lv_event_t *e)
@@ -4993,17 +4793,20 @@ static void event_handler_combo_Acc_Rance(lv_event_t *e)
     char buf[32];
     lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
     LV_LOG_USER("Option: %s", buf);
-
+#ifdef RB_ENABLE_QMI8658
     if (strcmp(buf, "2G") == 0)
-      acc_scale = GYR_RANGE_16DPS;
+      acc_scale = ACC_RANGE_2G;
     if (strcmp(buf, "4G") == 0)
-      acc_scale = GYR_RANGE_32DPS;
+      acc_scale = ACC_RANGE_4G;
     if (strcmp(buf, "8G") == 0)
-      acc_scale = GYR_RANGE_64DPS;
+      acc_scale = ACC_RANGE_8G;
     if (strcmp(buf, "16G") == 0)
-      acc_scale = GYR_RANGE_128DPS;
-
+      acc_scale = ACC_RANGE_16G;
+#endif
+#ifdef RB_ENABLE_QMI8658
     QMI8658_Init();
+#else
+#endif
   }
 }
 static void event_handler_combo_Gyro_ODR(lv_event_t *e)
@@ -5015,7 +4818,7 @@ static void event_handler_combo_Gyro_ODR(lv_event_t *e)
     char buf[32];
     lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
     LV_LOG_USER("Option: %s", buf);
-
+#ifdef RB_ENABLE_QMI8658
     if (strcmp(buf, "8000ODR") == 0)
       gyro_odr = gyro_odr_norm_8000;
     if (strcmp(buf, "4000ODR") == 0)
@@ -5034,8 +4837,11 @@ static void event_handler_combo_Gyro_ODR(lv_event_t *e)
       gyro_odr = gyro_odr_norm_60;
     if (strcmp(buf, "30ODR") == 0)
       gyro_odr = gyro_odr_norm_30;
-
+#endif
+#ifdef RB_ENABLE_QMI8658
     QMI8658_Init();
+#else
+#endif
   }
 }
 static void event_handler_combo_Acc_ODR(lv_event_t *e)
@@ -5047,7 +4853,7 @@ static void event_handler_combo_Acc_ODR(lv_event_t *e)
     char buf[32];
     lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
     LV_LOG_USER("Option: %s", buf);
-
+#ifdef RB_ENABLE_QMI8658
     if (strcmp(buf, "8000ODR") == 0)
       acc_odr = acc_odr_norm_8000;
     if (strcmp(buf, "4000ODR") == 0)
@@ -5066,8 +4872,11 @@ static void event_handler_combo_Acc_ODR(lv_event_t *e)
       acc_odr = acc_odr_norm_60;
     if (strcmp(buf, "30ODR") == 0)
       acc_odr = acc_odr_norm_30;
-
+#endif
+#ifdef RB_ENABLE_QMI8658
     QMI8658_Init();
+#else
+#endif
   }
 }
 static void event_handler_combo_Gyro_LPF(lv_event_t *e)
@@ -5079,7 +4888,7 @@ static void event_handler_combo_Gyro_LPF(lv_event_t *e)
     char buf[32];
     lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
     LV_LOG_USER("Option: %s", buf);
-
+#ifdef RB_ENABLE_QMI8658
     if (strcmp(buf, "0LPF") == 0)
       gyro_lpf = LPF_MODE_0;
     if (strcmp(buf, "1LPF") == 0)
@@ -5088,8 +4897,11 @@ static void event_handler_combo_Gyro_LPF(lv_event_t *e)
       gyro_lpf = LPF_MODE_2;
     if (strcmp(buf, "3LPF") == 0)
       gyro_lpf = LPF_MODE_3;
-
+#endif
+#ifdef RB_ENABLE_QMI8658
     QMI8658_Init();
+#else
+#endif
   }
 }
 static void event_handler_combo_Acc_LPF(lv_event_t *e)
@@ -5101,7 +4913,7 @@ static void event_handler_combo_Acc_LPF(lv_event_t *e)
     char buf[32];
     lv_dropdown_get_selected_str(obj, buf, sizeof(buf));
     LV_LOG_USER("Option: %s", buf);
-
+#ifdef RB_ENABLE_QMI8658
     if (strcmp(buf, "0LPF") == 0)
       acc_lpf = LPF_MODE_0;
     if (strcmp(buf, "1LPF") == 0)
@@ -5110,8 +4922,11 @@ static void event_handler_combo_Acc_LPF(lv_event_t *e)
       acc_lpf = LPF_MODE_2;
     if (strcmp(buf, "3LPF") == 0)
       acc_lpf = LPF_MODE_3;
-
+#endif
+#ifdef RB_ENABLE_QMI8658
     QMI8658_Init();
+#else
+#endif
   }
 }
 #endif
@@ -5136,7 +4951,7 @@ static void Onboard_create_VibrationTest(lv_obj_t *parent)
     }
   }
   lv_obj_clear_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
-
+#ifdef RB_ENABLE_QMI8658
   if (true)
   {
     QMISetRangeGyroCombo = lv_dropdown_create(parent);
@@ -5223,7 +5038,7 @@ static void Onboard_create_VibrationTest(lv_obj_t *parent)
     lv_obj_add_event_cb(QMISetLPFAccCombo, event_handler_combo_Acc_LPF, LV_EVENT_ALL, NULL);
     lv_dropdown_set_selected(QMISetLPFAccCombo, acc_lpf);
   }
-
+#endif
   Screen_GMeter_BallGyro = lv_obj_create(parent);
   lv_obj_set_scrollbar_mode(Screen_GMeter_BallGyro, LV_SCROLLBAR_MODE_OFF);
   lv_obj_set_size(Screen_GMeter_BallGyro, 32, 32);

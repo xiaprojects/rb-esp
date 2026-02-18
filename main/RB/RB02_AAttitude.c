@@ -814,7 +814,7 @@ lv_obj_t *RB02_AdvancedAttitude_CreateScreen(RB02_AdvancedAttitude_Status *aaSta
     {
         lv_obj_t *roundTile = lv_obj_create(aaStatus->lv_parent);
         lv_obj_clear_flag(roundTile, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_size(roundTile, 80, 28);
+        lv_obj_set_size(roundTile, 84, 28);
         lv_obj_align(roundTile, LV_ALIGN_CENTER, 105, 190);
         lv_obj_set_style_border_color(roundTile, lv_color_black(), 0);
         lv_obj_set_style_bg_color(roundTile, lv_color_black(), 0);

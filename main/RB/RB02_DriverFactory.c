@@ -27,7 +27,36 @@
  * Dual licensing for commercial agreement is available
  *
 */
-#include "RB02.h"
+#include "RB02_DriverFactory.h"
+
+IMUdata Accel;
+IMUdata Gyro;
+
+IMUdata AccelFiltered;
+IMUdata AccelFilteredWithoutPanelAlignment;
+IMUdata AccelFilteredMax;
+IMUdata GyroFiltered;
+IMUdata GyroFilteredWithoutPanelAlignment;
+IMUdata GyroBias;
+IMUdata PanelAlignment;
+
+float GPSLateralYAcceleration = 0;
+float GPSAccelerationForAttitudeCompensation = 0.0;
+float GFactor = 1.0;
+float GFactorMax = 0;
+float GFactorMin = 1.0;
+uint8_t GFactorDirty = 0;
+float AttitudePitch = 0;
+float AttitudeRoll = 0;
+float AttitudeYaw = 0;
+float AttitudeYawDegreePerSecond = 0;
+// 1.1.8 Improve reliabilty
+float FilterMoltiplier = 3.0;
+float FilterMoltiplierOutput = 5.0;
+float FilterMoltiplierGyro = 10.0;
+uint32_t SDCard_Size = 0;
+float AttitudeBalanceAlpha = 1.0 / 250.0;
+datetime_t datetime= {0};
 
 /**
  * TODO We shall move the source code in C++ or into structuct-Obj pointers to make a dinamic function to manage the data
@@ -61,6 +90,66 @@
 #ifdef RB_ENABLE_BMP280
 #include "BMP280.h"
 void Get_BMP280(void);   // Declaration
+#endif
+
+#ifdef RB_ENABLE_QMI8658
+#else
+void gyroHardwareCalibrationToZero()
+{
+}
+void gyroHardwareSetCalibration(float x, float y, float z)
+{
+}
+#endif
+
+#ifdef RB_ENABLE_PCF85063
+#else
+void RTC_Loop(void)
+{
+}
+#endif
+
+
+#ifdef RB_ENABLE_BMP280
+#include "BMP280.h"
+void Barometer_Init(void)
+{
+    BMP280_Init();
+}
+void Barometer_Setup(void)
+{
+    bmp280Setup();
+}
+void Barometer_ReadCalibration(void)
+{
+    bmp280readCalibration();
+}
+void Barometer_Update(void)
+{
+    Get_BMP280();
+}
+#else
+void Barometer_Init(void)
+{
+
+}
+void Barometer_Setup(void)
+{
+}
+void Barometer_Update(void)
+{
+}
+#endif
+
+
+#ifdef RB_ENABLE_SD_MMC
+#else
+void Flash_Searching(void)
+{
+}
+void SD_Init(void)
+{
+}
 #endif
 
 

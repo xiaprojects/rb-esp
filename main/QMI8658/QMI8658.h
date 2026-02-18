@@ -127,24 +127,7 @@ typedef enum {
     sensor_locking  
 } sensor_state_t;
 
-typedef struct __IMUdata {
-    float x;
-    float y;
-    float z;
-} IMUdata;
 
-extern IMUdata Accel;
-extern IMUdata Gyro;
-extern IMUdata AccelFiltered;
-extern IMUdata GyroFiltered;
-
-extern float GFactor;
-extern float GFactorMax;
-extern float GFactorMin;
-extern float AttitudePitch;
-extern float AttitudeRoll;
-extern float AttitudeYaw;
-extern float AttitudeYawDegreePerSecond;
 
 void QMI8658_Init(void);
 void QMI8658_Loop(void);

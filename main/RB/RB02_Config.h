@@ -50,6 +50,22 @@ void RB02_Console_AppendLog(uint8_t sourceId,uint8_t logLevel,const char *string
 
 #define RB02_STRUCTURE_CONFIG 1
 
+typedef struct __IMUdata {
+    float x;
+    float y;
+    float z;
+} IMUdata;
+
+typedef struct {
+    uint16_t year;
+    uint8_t month;
+    uint8_t day;
+    uint8_t dotw;
+    uint8_t hour;
+    uint8_t minute;
+    uint8_t second;
+}datetime_t;
+
 #ifdef RB_ENABLE_TRK
 typedef struct
 {

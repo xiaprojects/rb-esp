@@ -65,42 +65,30 @@
 #include "nvs.h"
 #include <math.h>
 #include "RB02_Config.h"
+#include "RB02_DriverFactory.h"
 extern uint8_t EnableAttitudeMadgwick;
+extern IMUdata Accel;
+extern IMUdata Gyro;
+extern IMUdata AccelFiltered;
+extern IMUdata GyroFiltered;
 
-IMUdata Accel;
-IMUdata Gyro;
+extern float GFactor;
+extern float GFactorMax;
+extern float GFactorMin;
+extern float AttitudePitch;
+extern float AttitudeRoll;
+extern float AttitudeYaw;
+extern float AttitudeYawDegreePerSecond;
 
-IMUdata AccelFiltered;
-IMUdata AccelFilteredWithoutPanelAlignment;
-IMUdata AccelFilteredMax;
-IMUdata GyroFiltered;
-IMUdata GyroFilteredWithoutPanelAlignment;
-IMUdata GyroBias;
-
-IMUdata PanelAlignment;
 // 1.1.30 HW Calibration IMUdata GyroCalibration;
 // Adjustable parameter: lower = slower yaw correction
 #define YAW_CORRECTION_GAIN 0.01f
 
 extern int64_t GPSLastSpeedKmhReceivedTick;
 
-float GPSLateralYAcceleration = 0;
-float GPSAccelerationForAttitudeCompensation = 0.0;
-float GFactor = 1.0;
-float GFactorMax = 0;
-float GFactorMin = 1.0;
-uint8_t GFactorDirty = 0;
-float AttitudePitch = 0;
-float AttitudeRoll = 0;
-float AttitudeYaw = 0;
-float AttitudeYawDegreePerSecond = 0;
-// 1.1.8 Improve reliabilty
-float FilterMoltiplier = 3.0;
-float FilterMoltiplierOutput = 5.0;
-float FilterMoltiplierGyro = 10.0;
 uint16_t lv_atan2(int x, int y);
 // Define complementary filter constant (adjust as needed)
-float AttitudeBalanceAlpha = 1.0 / 250.0;
+
 #define DT 0.1 // Time step HZ
 
 uint8_t Device_addr; // default for SD0/SA0 low, 0x6A if high

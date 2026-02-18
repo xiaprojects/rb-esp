@@ -166,7 +166,11 @@
 // TODO: optimise the code
 //#if RB_PRODUCT_LINE == 2
 #define RB_ENABLE_BMP280 1
+#define BMP280_DEFAULT_76 0x76
+#define BMP280_DEFAULT_77 0x77
 #define RB_ENABLE_QMI8658 1
+#define RB_ENABLE_PCF85063 1
+#define RB_ENABLE_SD_MMC 1
 //#endif
 
 #ifdef RB_ENABLE_BME680

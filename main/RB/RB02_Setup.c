@@ -28,6 +28,7 @@
 */
 #include "RB02_Console.h"
 #ifdef RB_ENABLE_SETUP
+#include "RB02_DriverFactory.h"
 #include <stdio.h>
 #include "nvs_flash.h"
 
