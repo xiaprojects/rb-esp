@@ -120,6 +120,8 @@ typedef struct
 #endif
     uint8_t settingsAutoQNH;
     int32_t bmp280override;
+    uint8_t bmp280Address;
+    uint8_t qnhIsInInches;    
     uint8_t structureVersion;
 #ifdef RB_ENABLE_DATALOGGER
     uint8_t settingsEnableDataLoggerRecording;

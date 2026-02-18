@@ -298,7 +298,7 @@ lv_obj_t *Ball = NULL;
 lv_obj_t *Screen_Attitude_Pitch = NULL;
 lv_obj_t *Screen_Attitude_RollIndicator = NULL;
 void *Screen_Attitude_Rounds[4];
-uint16_t QNH = 1013;
+float QNH = 1013.0;
 // lv_obj_t *Screen_Gyro_Gear = NULL;
 extern lv_obj_t *Screen_Altitude_Miles;
 extern lv_obj_t *Screen_Altitude_Cents;
@@ -2918,13 +2918,13 @@ static void RB02_AltimeterQNHUpdated()
       float QNHInInches = QNH / 33.8639;
       snprintf(buf, sizeof(buf), "%.2f", QNHInInches);
   } else {
-  snprintf(buf, sizeof(buf), "%03u", QNH);
+  snprintf(buf, sizeof(buf), "%03u", (uint16_t)QNH);
   }
 #ifdef RB_ENABLE_ALT
   lv_label_set_text(Screen_Altitude_QNH, buf);
 #endif
   // 1.1.2 added mmHg conversion
-  snprintf(buf, sizeof(buf), "QNH: %u %.02f", QNH, ((float)QNH) / 33.8639);
+  snprintf(buf, sizeof(buf), "QNH: %u %.02f", (uint16_t)QNH, ((float)QNH) / 33.8639);
 #ifdef RB_ENABLE_ALD
   lv_label_set_text(Screen_Altitude_QNH2, buf);
   snprintf(buf, sizeof(buf), "%+ld", Variometer);
@@ -3068,11 +3068,19 @@ void actionInTab(touchLocation location)
     switch (location)
     {
     case RB02_TOUCH_N:
+      if(singletonConfig()->qnhIsInInches){
+        QNH += 33.8639/100;
+      } else {
       QNH++;
+      }
       singletonConfig()->settingsAutoQNH = 0;
       break;
     case RB02_TOUCH_S:
+      if(singletonConfig()->qnhIsInInches){
+        QNH -= 33.8639/100;
+      } else {
       QNH--;
+      }
       singletonConfig()->settingsAutoQNH = 0;
       break;
     case RB02_TOUCH_CENTER:
@@ -3323,7 +3331,7 @@ static void AltimeterOverrideChanged(lv_event_t *e)
   example1_BMP280_lvgl_tick(NULL);
 
   char buf[50];
-  sprintf(buf, "Altimeter QNH: %d mmHg %ld feet (%ld)", QNH, Altimeter, singletonConfig()->bmp280override);
+  sprintf(buf, "Altimeter QNH: %d mmHg %ld feet (%ld)", (uint16_t)QNH, Altimeter, singletonConfig()->bmp280override);
   lv_label_set_text(bmp280overrideLabel, buf);
 
   // Store
@@ -3804,7 +3812,7 @@ static void Onboard_create_Setup(lv_obj_t *parent)
     lv_obj_set_style_text_align(bmp280overrideLabel, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_font(bmp280overrideLabel, &lv_font_montserrat_16, 0);
     char buf[50];
-    sprintf(buf, "Altimeter QNH: %d mmHg %ld feet (%ld)", QNH, Altimeter, singletonConfig()->bmp280override);
+    sprintf(buf, "Altimeter QNH: %d mmHg %ld feet (%ld)", (uint16_t)QNH, Altimeter, singletonConfig()->bmp280override);
     lv_label_set_text(bmp280overrideLabel, buf);
     lv_obj_add_style(bmp280overrideLabel, &style_title, LV_STATE_DEFAULT);
 

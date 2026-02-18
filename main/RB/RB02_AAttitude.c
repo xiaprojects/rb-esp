@@ -54,7 +54,6 @@ extern uint16_t speedGreen;
 extern uint16_t speedYellow;
 extern uint16_t speedRed;
 extern float AttitudeYawDegreePerSecond;
-extern uint16_t QNH;
 extern IMUdata AccelFiltered;
 extern const lv_res_t Screen_TurnSlip_Obj_Ball_Size;
 extern float AttitudePitch;
@@ -295,7 +294,7 @@ void RB02_AdvancedAttitude_MoveBall(lv_obj_t *item, uint16_t degree)
     lv_obj_align(item, LV_ALIGN_CENTER, x, y);
 }
 
-void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *gpsStatus, int32_t Altimeter, int32_t QNH, int32_t Variometer)
+void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *gpsStatus, int32_t Altimeter, float QNH, int32_t Variometer)
 {
     char buf[10];
 
@@ -454,7 +453,7 @@ void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *g
             float QNHInInches = QNH / 33.8639;
             snprintf(buf, sizeof(buf), "%.2f", QNHInInches);
         } else {
-        snprintf(buf, sizeof(buf), "%ld", QNH);
+            snprintf(buf, sizeof(buf), "%.0f", QNH);
         }
         lv_label_set_text(aaStatus->lv_qnh, buf);
     }

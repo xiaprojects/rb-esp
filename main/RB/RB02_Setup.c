@@ -446,6 +446,7 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     lv_obj_set_style_text_align(DisableFilteringLabel, LV_TEXT_ALIGN_RIGHT, 0);
     lv_obj_set_style_text_font(DisableFilteringLabel, &lv_font_montserrat_16, 0);
     lv_label_set_text(DisableFilteringLabel, "QNH InHg");
+    lv_obj_set_style_text_color(DisableFilteringLabel, lv_color_white(), 0);
     lv_obj_t *sw = lv_switch_create(parent);
     if (singletonConfig()->qnhIsInInches != 0)
     {

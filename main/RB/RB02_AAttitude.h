@@ -78,5 +78,5 @@ typedef struct
 extern RB02_AdvancedAttitude_Status advancedAttitude_Status;
 
 lv_obj_t *RB02_AdvancedAttitude_CreateScreen(RB02_AdvancedAttitude_Status *aaStatus);
-void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *gpsStatus, int32_t Altimeter, int32_t QNH, int32_t Variometer);
+void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *gpsStatus, int32_t Altimeter, float QNH, int32_t Variometer);
 #endif

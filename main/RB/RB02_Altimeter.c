@@ -39,7 +39,6 @@ lv_obj_t *Screen_Altitude_QNH = NULL;
 lv_obj_t *Screen_Altitude_Miles = NULL;
 lv_obj_t *Screen_Altitude_Cents = NULL;
 
-extern uint16_t QNH;
 
 lv_obj_t *RB02_Altimeter_CreateScreen(lv_obj_t *parent)
 {
@@ -84,6 +83,7 @@ lv_obj_t *RB02_Altimeter_CreateScreen(lv_obj_t *parent)
 
     if (parent != NULL && Screen_Altitude_QNH == NULL)
     {
+        uint16_t QNH = 1013;
         Screen_Altitude_QNH = lv_label_create(parent);
         lv_obj_set_size(Screen_Altitude_QNH, 150, 48);
         lv_obj_align(Screen_Altitude_QNH, LV_ALIGN_CENTER, 155, 0);
