@@ -415,8 +415,8 @@ static lv_disp_t *display_init(esp_lcd_panel_handle_t panel_handle)
     return lv_disp_drv_register(&disp_drv); // Register the display driver
 }
 
-lv_coord_t TouchPadLastX = 0;
-lv_coord_t TouchPadLastY = 0;
+extern int16_t TouchPadLastX;
+extern int16_t TouchPadLastY;
 
 static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 {
