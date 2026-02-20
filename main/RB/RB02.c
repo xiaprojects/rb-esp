@@ -155,8 +155,13 @@ void DidYouJoinedDiscord()
 #include "RB02_NavCore.h"
 #endif
 
-#include "PCF85063.h"
+
 #include "RB02_SDCardInject.c"
+#if LVGL_VERSION_MAJOR >=9
+#include <../src/widgets/tabview/lv_tabview_private.h>
+
+#endif
+
 
 #define Backlight_MAX 100
 void Set_Backlight(uint8_t Light);
@@ -173,8 +178,8 @@ extern IMUdata AccelFilteredMax;
 extern IMUdata GyroBias;
 // 1.1.8 Quaternion alignment
 extern IMUdata AccelBias;
-extern lv_coord_t TouchPadLastX;
-extern lv_coord_t TouchPadLastY;
+extern int16_t TouchPadLastX;
+extern int16_t TouchPadLastY;
 extern float AttitudeBalanceAlpha;
 extern float FilterMoltiplier;
 extern float FilterMoltiplierOutput;
@@ -214,7 +219,7 @@ extern IMUdata PanelAlignment;
 
 // DEFINES
 #define RB02_TOUCH_SECTION 3
-#define RB02_TOUCH_SECTION_SIZE 160
+
 #define DIGIT_BIG_SEGMENTS 7
 #define DIGIT_BIG_DIGIT 4
 #define DIGIT_MINOR_DIGIT 2
@@ -325,7 +330,6 @@ uint8_t selectedTimer = 0;
 datetime_t datetimeTimer1 = {0};
 datetime_t datetimeTimer2 = {0};
 datetime_t datetimeTimer3 = {0};
-const lv_res_t Screen_TurnSlip_Obj_Ball_Size = SCREEN_HEIGHT / 12;
 lv_obj_t *Screen_TurnSlip_Obj_Ball = NULL;
 lv_obj_t *Screen_TurnSlip_Obj_Label = NULL;
 lv_obj_t *Screen_TurnSlip_Obj_Turn = NULL;
@@ -400,8 +404,10 @@ void callbackTouch()
 
 touchLocation getTouchLocation(lv_coord_t x, lv_coord_t y)
 {
-  int8_t sx = x / RB02_TOUCH_SECTION_SIZE;
-  int8_t sy = y / RB02_TOUCH_SECTION_SIZE;
+  lv_coord_t w = lv_disp_get_hor_res(NULL);
+  lv_coord_t h = lv_disp_get_ver_res(NULL);
+  int8_t sx = x / (w /RB02_TOUCH_SECTION);
+  int8_t sy = y / (h /RB02_TOUCH_SECTION);
   touchLocation returnCode = sy * RB02_TOUCH_SECTION + sx;
   return returnCode;
 }
@@ -1877,7 +1883,6 @@ void RB02_CreateScreens()
         f = NULL;
         lv_obj_t *backgroundImage = lv_img_create(lvTabSplashScreen);
         lv_img_set_src(backgroundImage, "S:/SS48016.bmp");
-        lv_obj_set_size(backgroundImage, SCREEN_WIDTH, SCREEN_HEIGHT);
         lv_obj_align(backgroundImage, LV_ALIGN_CENTER, 0, 0);
         lv_obj_set_scrollbar_mode(backgroundImage, LV_SCROLLBAR_MODE_OFF);
         lv_obj_set_scrollbar_mode(lvTabSplashScreen, LV_SCROLLBAR_MODE_OFF);
@@ -1954,7 +1959,11 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
         uint16_t cur = tabview->tab_cur;
         cur++;
         // Skip setup page
+#if LVGL_VERSION_MAJOR >=9
+        if (cur >= lv_tabview_get_tab_count(tv) - 2)
+#else
         if (cur >= tabview->tab_cnt - 2)
+#endif
         {
           cur = 0;
         }
@@ -4670,6 +4679,8 @@ static void Onboard_create_TurnSlip(lv_obj_t *parent)
 
   lv_obj_t *_screenBall = lv_obj_create(parent);
   lv_obj_set_scrollbar_mode(_screenBall, LV_SCROLLBAR_MODE_OFF);
+  lv_coord_t h = lv_disp_get_ver_res(NULL);
+  const lv_res_t Screen_TurnSlip_Obj_Ball_Size = h / 12;
   lv_obj_set_size(_screenBall, Screen_TurnSlip_Obj_Ball_Size, Screen_TurnSlip_Obj_Ball_Size);
 
   lv_obj_align(_screenBall, LV_ALIGN_CENTER, 0, 0);

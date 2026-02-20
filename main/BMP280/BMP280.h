@@ -27,3 +27,8 @@
  * Dual licensing for commercial agreement is available
  *
 */
+
+void BMP280_Init(void);
+void Get_BMP280(void);
+void bmp280Setup();
+void bmp280readCalibration();

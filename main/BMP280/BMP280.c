@@ -30,6 +30,7 @@
 
 #include "BMP280.h"
 #include "RB02_DriverFactory.h"
+#include "I2C_Driver.h"
 #define BMP280_S64_t int64_t
 #define BMP280_U32_t uint32_t
 #define BMP280_S32_t int32_t

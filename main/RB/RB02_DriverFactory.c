@@ -57,6 +57,11 @@ float FilterMoltiplierGyro = 10.0;
 uint32_t SDCard_Size = 0;
 float AttitudeBalanceAlpha = 1.0 / 250.0;
 datetime_t datetime= {0};
+int16_t TouchPadLastX;
+int16_t TouchPadLastY;
+
+uint8_t DriverLoopMilliseconds = 40;
+
 
 /**
  * TODO We shall move the source code in C++ or into structuct-Obj pointers to make a dinamic function to manage the data
@@ -87,6 +92,26 @@ datetime_t datetime= {0};
 #ifdef RB_ENABLE_BMI270
 #endif
 
+/* Integration shall provide the following functions */
+#ifdef RB_NOT_COMPLETED_INTEGRATION
+uint8_t LCD_Backlight = 0;
+float BAT_analogVolts = 0;
+
+void Set_Backlight(uint8_t Light)
+{
+    LCD_Backlight = Light;
+}
+
+void Buzzer_On()
+{
+
+}
+
+void Buzzer_Off()
+{
+
+}
+#endif
 #ifdef RB_ENABLE_BMP280
 #include "BMP280.h"
 void Get_BMP280(void);   // Declaration
@@ -137,6 +162,9 @@ void Barometer_Setup(void)
 {
 }
 void Barometer_Update(void)
+{
+}
+void Barometer_ReadCalibration(void)
 {
 }
 #endif

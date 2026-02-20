@@ -30,6 +30,7 @@
 #ifdef RB_ENABLE_CONSOLE
 #include "RB02_Config.h"
 #include <stdio.h>
+#include <string.h>
 
 extern RB02_Status *rb02Status;
 

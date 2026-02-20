@@ -263,7 +263,8 @@ void RB02_GPSMap_ReloadTiles(RB02_GpsMapStatus *gpsMapStatus, gps_t *gpsStatus, 
 #ifdef RB_02_ENABLE_EXTERNALMAP
     //
     char filename[41];
-
+    lv_coord_t SCREEN_WIDTH = lv_disp_get_hor_res(NULL);
+    lv_coord_t SCREEN_HEIGHT = lv_disp_get_ver_res(NULL);
     for (int y = 0; y < SCREEN_HEIGHT / gpsMapStatus->tileSizeHeight; y++)
     {
         for (int x = 0; x < SCREEN_WIDTH / gpsMapStatus->tileSizeWidth; x++)

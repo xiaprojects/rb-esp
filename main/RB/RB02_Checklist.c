@@ -28,6 +28,7 @@
 #include "RB02_Checklist.h"
 #ifdef RB_ENABLE_CHECKLIST
 #include <stdio.h>
+#include <string.h>
 
 extern lv_style_t style_title;
 

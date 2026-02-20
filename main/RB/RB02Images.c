@@ -59,6 +59,14 @@
 #ifndef RB02_IMAGES
 #define RB02_IMAGES
 
+/* Warning updating from LVGL 8.x to 9.x many high quality images with or without resolution are not fully supported */
+#if LVGL_VERSION_MAJOR >=9
+// Do the trick
+#undef LV_COLOR_DEPTH
+#define LV_COLOR_DEPTH 32
+#else
+#endif
+
 #ifdef RB_ENABLE_ALD
 // Altimeter Digital
 #include "DigitFont100x25.c"
@@ -116,6 +124,13 @@
 #include "Radar.c"
 #include "RoundMapWithControlledSpaces.c"
 #include "RoundHSI.c"
+#endif
+
+#if LVGL_VERSION_MAJOR >=9
+// Do the trick
+#undef LV_COLOR_DEPTH
+#define LV_COLOR_DEPTH CONFIG_LV_COLOR_DEPTH
+#else
 #endif
 
 #endif

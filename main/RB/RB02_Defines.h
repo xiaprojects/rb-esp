@@ -79,8 +79,6 @@
 #endif
 
 
-#define SCREEN_HEIGHT 480
-#define SCREEN_WIDTH 480
 
 
 // 1.1.24 int16_t
@@ -165,6 +163,7 @@
 
 // TODO: optimise the code
 //#if RB_PRODUCT_LINE == 2
+//#define RB_NOT_COMPLETED_INTEGRATION 1
 #define RB_ENABLE_BMP280 1
 #define BMP280_DEFAULT_76 0x76
 #define BMP280_DEFAULT_77 0x77
@@ -189,3 +188,4 @@
 //#define RB_ENABLE_BMI270 1
 //#undef RB_ENABLE_QMI8658
 #endif
+

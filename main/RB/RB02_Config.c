@@ -28,8 +28,14 @@
 
 #include "RB02_Config.h"
 #include "nvs_flash.h"
+#include <lvgl.h>
 
 RB02_Status *rb02Status = NULL;
+
+#if LVGL_VERSION_MAJOR >=9
+typedef lv_mem_alloc lv_malloc
+#endif
+
 
 RB02_Status *singletonConfig()
 {
@@ -38,7 +44,7 @@ RB02_Status *singletonConfig()
         rb02Status = lv_mem_alloc(sizeof(RB02_Status));
         if (rb02Status != NULL)
         {
-            lv_memset_00(rb02Status, sizeof(RB02_Status));
+            lv_memset(rb02Status, 0, sizeof(RB02_Status));
         }
     }
     return rb02Status;

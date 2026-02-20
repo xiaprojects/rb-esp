@@ -32,7 +32,7 @@
 #include "RB02_GUIHelpers.h"
 #include <stdio.h>
 #include <math.h>
-#include "QMI8658.h"
+#include <string.h>
 #include "images/AAttitudeBackgroundPlain.c"
 #include "images/AAttitudeBackgroundTriangleLeft.c"
 #include "images/AAttitudeBackgroundTriangleRight.c"
@@ -55,7 +55,6 @@ extern uint16_t speedYellow;
 extern uint16_t speedRed;
 extern float AttitudeYawDegreePerSecond;
 extern IMUdata AccelFiltered;
-extern const lv_res_t Screen_TurnSlip_Obj_Ball_Size;
 extern float AttitudePitch;
 extern float AttitudeRoll;
 
@@ -157,6 +156,8 @@ void lit(int8_t *matrix, float p, float r, uint8_t sizeRow, lv_obj_t **tiles)
 
 int8_t RB02_AdvancedAttitude_SkyMatrixAlign(RB02_AdvancedAttitude_Status *aaStatus, float pitch, float roll)
 {
+    lv_coord_t SCREEN_WIDTH = lv_disp_get_hor_res(NULL);
+    lv_coord_t SCREEN_HEIGHT = lv_disp_get_ver_res(NULL);
 
     int8_t rr = 10;
     int8_t rp = 10;
@@ -297,7 +298,7 @@ void RB02_AdvancedAttitude_MoveBall(lv_obj_t *item, uint16_t degree)
 void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *gpsStatus, int32_t Altimeter, float QNH, int32_t Variometer)
 {
     char buf[10];
-
+    lv_coord_t SCREEN_HEIGHT = lv_disp_get_ver_res(NULL);
     int16_t AltimeterInFeet = Altimeter / 100.0;
 
     if (aaStatus->Altimeter != AltimeterInFeet)
@@ -481,7 +482,7 @@ void RB02_AdvancedAttitude_Tick(RB02_AdvancedAttitude_Status *aaStatus, gps_t *g
     }
 }
 
-lv_color16_t RB02_AdvancedAttitude_GenerateColorAtIndexLeft(int index, int32_t value)
+lv_color_t RB02_AdvancedAttitude_GenerateColorAtIndexLeft(int index, int32_t value)
 {
     float degreeTotal = degreeEnd - degreeStart;
     float degreeWhite = RB_AAT_ARC_NUMBERS * (speedWhite - degreeStart) / degreeTotal;
@@ -521,12 +522,12 @@ lv_color16_t RB02_AdvancedAttitude_GenerateColorAtIndexLeft(int index, int32_t v
 
     return lv_color_make(0x3c, 0x3c, 0x3c);
 }
-lv_color16_t RB02_AdvancedAttitude_GenerateColorAtIndexRight(int index, int32_t value)
+lv_color_t RB02_AdvancedAttitude_GenerateColorAtIndexRight(int index, int32_t value)
 {
     return lv_color_make(240, 240, 240);
 }
 
-lv_obj_t *RB02_AdvancedAttitude_CreateArcSlice(lv_obj_t *parent, lv_color16_t color, uint16_t degree)
+lv_obj_t *RB02_AdvancedAttitude_CreateArcSlice(lv_obj_t *parent, lv_color_t color, uint16_t degree)
 {
 
     lv_obj_t *_pinkRect = lv_obj_create(parent);
@@ -572,7 +573,8 @@ lv_obj_t *RB02_AdvancedAttitude_DrawText(lv_obj_t *parent, lv_coord_t x, lv_coor
 
 lv_obj_t *RB02_AdvancedAttitude_CreateScreen(RB02_AdvancedAttitude_Status *aaStatus)
 {
-
+    lv_coord_t SCREEN_HEIGHT = lv_disp_get_ver_res(NULL);
+    const lv_res_t Screen_TurnSlip_Obj_Ball_Size = SCREEN_HEIGHT / 12;
     aaStatus->Altimeter = 1;
     aaStatus->QNH = 1;
     aaStatus->Variometer = 1;

@@ -69,7 +69,7 @@
 #endif
 
 // 1.1.9
-uint8_t DriverLoopMilliseconds = 40;
+extern uint8_t DriverLoopMilliseconds;
 
 extern uint8_t workflow; // When sensor is ready (After Calibration)
 void Driver_Attitude_Loop(void) ;
