@@ -41,8 +41,10 @@ uint16_t RB02_SuggestedQNH(float GPSAltitudeMeters,int32_t CurrentPressure)
     {
         return 1013;
     }
+    // Conversion table
+    float ftXhPa = 27.5+(GPSAltitudeMeters/1500);
     // Altimeter is *100 feet
-    int32_t SuggestedQNH = (((GPSAltitudeMeters * 3.28084 * 100.0)/30.0)+CurrentPressure)/100.0;
+    int32_t SuggestedQNH = (((GPSAltitudeMeters * 3.28084 * 100.0)/ftXhPa)+CurrentPressure)/100.0;
     return SuggestedQNH;
 }
 
