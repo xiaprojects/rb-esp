@@ -23,11 +23,14 @@
  * 05 -> Display with Stratux BLE Traffic
  * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
  * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
  * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  *
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available
  *
+ * More about in https://www.rbavionics.com and Discord community
+ * 
  * Starting from version 1.1.3 both of displays are supported: 2.8 and 2.1
  *
  * RB02.c
@@ -124,6 +127,11 @@ void DidYouJoinedDiscord()
 #include "RB05_Radar.h"
 #endif
 
+#if RB_LICENSE_TYPE == RB_LICENSE_TYPE_COMMERCIAL
+#include "RB_License.h"
+#else
+#endif
+
 // 1.1.5 Added Vendor Splashscreen
 #include "Vendor.h"
 
@@ -162,7 +170,7 @@ void DidYouJoinedDiscord()
 
 #endif
 
-
+void lvgl8_print_screen_bmp_base64(void);
 #define Backlight_MAX 100
 void Set_Backlight(uint8_t Light);
 int64_t esp_timer_get_time(void);
@@ -591,6 +599,24 @@ void RB02_Example1(void)
 #endif
   printf("$RB,02,%d,%s,%d,%llX\n", RB_02_DISPLAY_SIZE, RB_VERSION, hasGPS, _chipmacid);
 #endif
+
+#if RB_LICENSE_TYPE == RB_LICENSE_TYPE_COMMERCIAL
+  uint64_t license = 0;
+  printf("Searching for RB License: %llX\n", _chipmacid);
+  singletonConfig()->licenseValid = read_license_text(&license);
+  if(singletonConfig()->licenseValid==true){
+    singletonConfig()->licenseValid = licenseValidated(_chipmacid,license);
+    printf("License: %llX result: %d\n", license, singletonConfig()->licenseValid);
+  } else {
+    printf("License not found\n");
+  }
+  if(singletonConfig()->licenseValid==false){
+    printf("License not compatible\n");
+  }
+#else
+  printf("License if COMMUNITY FREE for NON Commercial (%d)\n", RB_LICENSE_TYPE);
+#endif
+
 #ifdef RB_ENABLE_CHECKLIST
   RB02_Checklist_CreateScreen(tChecklist, "/sdcard/check.txt");
   lv_obj_add_event_cb(tChecklist, speedBgClicked, LV_EVENT_CLICKED, NULL);
@@ -734,7 +760,7 @@ void nmea_GGA_UpdatedValueFor(uint8_t csvCounter, int32_t finalNumber, uint8_t d
           {
             uint16_t SuggestedQNH = RB02_SuggestedQNH(singletonConfig()->NMEA_DATA.altitude, bmp280Pressure);
 #ifdef RB_ENABLE_CONSOLE_DEBUG
-            printf("Suggested QNH %d vs %d\n", SuggestedQNH, QNH);
+            printf("Suggested QNH %d vs %d\n", SuggestedQNH, (int)QNH);
 #endif
             if (SuggestedQNH - QNH < 10 && SuggestedQNH - QNH > -10)
             {
@@ -1314,7 +1340,7 @@ void nvsRestoreSettings()
     nvs_get_i16(my_handle, "calGZ", &compBuffer);
     singletonConfig()->GyroHardwareCalibration.z = compBuffer / RB_GYRO_CALIBRATION_PRECISION;
 #ifdef RB_ENABLE_CONSOLE_DEBUG
-    printf("Gyro Calibration %.1f %.1f %.1f\n", singletonConfig()->GyroHardwareCalibration.x, singletonConfig()->GyroHardwareCalibration.z, singletonConfig()->GyroHardwareCalibration.z);
+    printf("Gyro Calibration %.1f %.1f %.1f\n", singletonConfig()->GyroHardwareCalibration.x, singletonConfig()->GyroHardwareCalibration.y, singletonConfig()->GyroHardwareCalibration.z);
 #endif
 
     compBuffer = 0;
@@ -1329,7 +1355,9 @@ void nvsRestoreSettings()
     nvs_get_i16(my_handle, "panAX", &compBuffer);
     PanelAlignment.x = compBuffer / (RB_GYRO_CALIBRATION_PRECISION / 2.0);
 
-    gyroHardwareSetCalibration(GyroFiltered.x, GyroFiltered.y, GyroFiltered.z);
+    /* On certain devices this is too early postponed to the workflow
+    gyroHardwareSetCalibration(singletonConfig()->GyroHardwareCalibration.x, singletonConfig()->GyroHardwareCalibration.y, singletonConfig()->GyroHardwareCalibration.z);
+    */
 
 #ifdef RB_ENABLE_GPS
     // 1.1.25B
@@ -1927,9 +1955,26 @@ void RB02_CreateScreens()
   lv_obj_add_event_cb(singletonConfig()->ui.tEMS, speedBgClicked, LV_EVENT_CLICKED, NULL);
 #endif
 }
+#include "esp_log.h"
+
+#ifdef ENABLE_SCREENSHOTS
+esp_err_t lvgl8_save_screen_bmp_to_sd(const char *path);
+#endif
 
 void rb_increase_lvgl_tick(lv_timer_t *t)
 {
+
+#ifdef ENABLE_SCREENSHOTS
+  static uint32_t snapTimer = 600;
+  snapTimer = snapTimer - 1;
+  if(snapTimer < 1)
+  {
+    snapTimer = 600;
+    char buf[30];
+    snprintf(buf, sizeof(buf), "/sdcard/%02d%02d%02d.bmp", datetime.hour, datetime.minute, datetime.second);
+    lvgl8_save_screen_bmp_to_sd(buf);
+  }
+#endif
   // TODO: add a configuration panel
   uint8_t forcedCalibrationOnBoot = true;
 #ifdef RB_02_DISPLAY_TOUCH
@@ -1951,6 +1996,8 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
         GFactorDirty = 0;
         nvsStoreGMeter();
       }
+
+     
 
       if (DeviceIsDemoMode > 0 && mbox1 == NULL)
       {
@@ -2012,7 +2059,7 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
     case 7:
       Barometer_ReadCalibration();
       break;
-    case 78:
+    case 70:
       if (forcedCalibrationOnBoot == true)
       {
         GyroBiasAcquire[0].x = GyroFiltered.x;
@@ -2028,7 +2075,7 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
 #endif
 #endif
       break;
-    case 79:
+    case 75:
       if (forcedCalibrationOnBoot == true)
       {
         GyroBiasAcquire[1].x = GyroFiltered.x;
@@ -2048,6 +2095,9 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
         GyroBias.x = -(GyroBiasAcquire[0].x + GyroBiasAcquire[1].x + GyroBiasAcquire[2].x) / 3.0;
         GyroBias.y = -(GyroBiasAcquire[0].y + GyroBiasAcquire[1].y + GyroBiasAcquire[2].y) / 3.0;
         GyroBias.z = -(GyroBiasAcquire[0].z + GyroBiasAcquire[1].z + GyroBiasAcquire[2].z) / 3.0;
+
+        // Moved hardware offset here due to heavy warm up delay on certain devices
+        gyroHardwareSetCalibration(-GyroBias.x,-GyroBias.y,-GyroBias.z);
 
 #ifdef RB_ENABLE_CONSOLE
         char ConsoleLogBuffer[20];
@@ -2134,6 +2184,21 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
         lv_tabview_set_act(tv, StartupPage, LV_ANIM_OFF);
       }
 #endif
+#if RB_LICENSE_TYPE == RB_LICENSE_TYPE_COMMERCIAL
+      if(singletonConfig()->licenseValid==false){
+        lv_obj_t *VersionLabel = lv_label_create(lv_scr_act());
+        lv_obj_set_size(VersionLabel, 300, 150);
+        lv_obj_align(VersionLabel, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_text_font(VersionLabel, &lv_font_montserrat_48, 0);
+        lv_obj_set_style_text_align(VersionLabel, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(VersionLabel, "MISSING LICENSE");
+        lv_obj_set_style_bg_color(VersionLabel, lv_color_make(255, 0, 0), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(VersionLabel, LV_OPA_COVER, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_text_color(VersionLabel, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
+
+      }
+#else
+#endif
 
       break;
     default:
@@ -2197,6 +2262,7 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
 #ifdef RB_ENABLE_TRAFFIC
   case RB02_TAB_RDR:
     RB05_Radar_Tick(&(singletonConfig()->trafficStatus));
+#ifdef RB02_ESP_BLUETOOTH
     if (singletonConfig()->Operative_Bluetooth && OperativeWarningVisible == true)
     {
       lv_obj_add_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
@@ -2213,9 +2279,11 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
       {
       }
     }
+#endif
     break;
   case RB02_TAB_TRA:
     RB05_Traffic_Tick(&(singletonConfig()->trafficStatus));
+#ifdef RB02_ESP_BLUETOOTH
     if (singletonConfig()->Operative_Bluetooth && OperativeWarningVisible == true)
     {
       lv_obj_add_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
@@ -2232,6 +2300,7 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
       {
       }
     }
+#endif
     break;
 #endif
 
