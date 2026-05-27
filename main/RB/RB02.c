@@ -2097,7 +2097,7 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
         GyroBias.z = -(GyroBiasAcquire[0].z + GyroBiasAcquire[1].z + GyroBiasAcquire[2].z) / 3.0;
 
         // Moved hardware offset here due to heavy warm up delay on certain devices
-        gyroHardwareSetCalibration(-GyroBias.x,-GyroBias.y,-GyroBias.z);
+        gyroHardwareSetCalibration(GyroFiltered.x,GyroFiltered.y,GyroFiltered.z);
 
 #ifdef RB_ENABLE_CONSOLE
         char ConsoleLogBuffer[20];
