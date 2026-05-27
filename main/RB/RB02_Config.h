@@ -177,6 +177,11 @@ RB02_GpsMapStatus gpsMapStatus;
 RB05_TrafficStatus trafficStatus;
 #endif
     RB02_UI ui;
+
+#if RB_LICENSE_TYPE == RB_LICENSE_TYPE_COMMERCIAL
+    bool licenseValid;
+#else
+#endif
 } RB02_Status;
 
 extern RB02_Status *rb02Status;
