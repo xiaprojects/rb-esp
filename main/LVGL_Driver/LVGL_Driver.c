@@ -355,7 +355,9 @@ void flush_callback(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color
 
 #endif /* LVGL_PORT_AVOID_TEAR_ENABLE */
 lv_disp_drv_t disp_drv = { 0 };          // Contains LCD panel handle and callback functions
-
+#if defined(RB_DISPLAY_DEBUG) ||  defined(RB_TOUCH_DEBUG)
+extern void RB_Debug_Update_Label(int,int,int);
+#endif
 static lv_disp_t *display_init(esp_lcd_panel_handle_t panel_handle)
 {
     assert(panel_handle); // Ensure the panel handle is valid
@@ -417,6 +419,7 @@ static lv_disp_t *display_init(esp_lcd_panel_handle_t panel_handle)
 
 extern int16_t TouchPadLastX;
 extern int16_t TouchPadLastY;
+int16_t BadTouchPadLastX;
 
 static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
 {
@@ -433,6 +436,26 @@ static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
     /* Read data from touch controller */
     bool touchpad_pressed = esp_lcd_touch_get_coordinates(tp, &touchpad_x, &touchpad_y, NULL, &touchpad_cnt, 1); // Get touch coordinates
     if (touchpad_pressed && touchpad_cnt > 0) {
+        if(touchpad_x > RB_TOUCH_WORKAROUND_MAX_X){
+            /*
+            if(touchpad_x==BadTouchPadLastX){
+                data->state = LV_INDEV_STATE_RELEASED; // Set state to released
+                return;
+            }
+            */
+            static int64_t last = 0;
+            int64_t now = esp_timer_get_time();
+            int32_t elapsed = now - last;
+            if(elapsed>500000){
+                data->state = LV_INDEV_STATE_RELEASED; // Set state to released
+                BadTouchPadLastX = touchpad_x;
+                return;
+            }
+            //touchpad_x = (touchpad_x-2816); // Apply workaround for touchpad X coordinate
+            BadTouchPadLastX = touchpad_x;
+            touchpad_x = TouchPadLastX;
+            last = now;
+        }
         data->point.x = touchpad_x; // Set the X coordinate
         data->point.y = touchpad_y; // Set the Y coordinate
         data->state = LV_INDEV_STATE_PRESSED; // Set state to pressed
@@ -440,6 +463,10 @@ static void touchpad_read(lv_indev_drv_t *indev_drv, lv_indev_data_t *data)
         TouchPadLastX = data->point.x;
         TouchPadLastY = data->point.y;
 
+#if defined(RB_DISPLAY_DEBUG) ||  defined(RB_TOUCH_DEBUG)
+printf("Touch position: %d,%d,%d\n", touchpad_x, touchpad_y, touchpad_cnt); // Print touch position for debugging
+RB_Debug_Update_Label(touchpad_x, touchpad_y, touchpad_cnt);
+#endif
     } else {
         data->state = LV_INDEV_STATE_RELEASED; // Set state to released
     }

@@ -38,7 +38,7 @@ ST7701S_handle ST7701S_newObject(int SDA, int SCL, int CS, char channel_select, 
 
         st7701s_handle->st7701s_protocol_config_t.command_bits = 1;
         st7701s_handle->st7701s_protocol_config_t.address_bits = 8;
-        st7701s_handle->st7701s_protocol_config_t.clock_speed_hz = 4000000;
+        st7701s_handle->st7701s_protocol_config_t.clock_speed_hz = EXAMPLE_LCD_PIXEL_CLOCK_SPEED;
         st7701s_handle->st7701s_protocol_config_t.mode = 0;
         st7701s_handle->st7701s_protocol_config_t.spics_io_num = CS;
         st7701s_handle->st7701s_protocol_config_t.queue_size = 1;

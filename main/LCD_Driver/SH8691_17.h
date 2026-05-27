@@ -28,3 +28,20 @@
  * Dual licensing for commercial agreement is available
  *
 */
+
+#include "../RB/RB02.h"
+#include "driver/spi_master.h"
+#include "driver/gpio.h"
+#include "freertos/task.h"
+#include "esp_lcd_panel_ops.h"
+#include "esp_lcd_panel_rgb.h"
+#include "esp_err.h"
+#include "esp_log.h"
+#include "driver/ledc.h"
+
+#include "TCA9554PWR.h"
+#include "LVGL_Driver.h"
+#include "esp_lcd_sh8601/include/esp_lcd_sh8601.h"
+
+void LCD_Init();
+extern esp_lcd_panel_handle_t panel_handle;
