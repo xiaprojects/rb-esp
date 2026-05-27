@@ -66,6 +66,7 @@ typedef struct
     int8_t BallFactor;
     int8_t AttitudePitch;
     int8_t AttitudeRoll;
+    int8_t SkyInverted;
     int16_t Speed;
     int16_t Track;
     uint8_t advancedAttitudeMaxHeigh100;

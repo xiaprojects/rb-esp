@@ -92,8 +92,9 @@ uint16_t lv_atan2(int x, int y);
 #define DT 0.1 // Time step HZ
 
 uint8_t Device_addr; // default for SD0/SA0 low, 0x6A if high
-acc_scale_t acc_scale = ACC_RANGE_4G;
-gyro_scale_t gyro_scale = GYR_RANGE_32DPS;
+// 1.7.0 Aerobatic grade
+acc_scale_t acc_scale = ACC_RANGE_8G;
+gyro_scale_t gyro_scale = GYR_RANGE_128DPS;
 acc_odr_t acc_odr = acc_odr_norm_30;
 gyro_odr_t gyro_odr = gyro_odr_norm_30;
 sensor_state_t sensor_state = sensor_default;
@@ -111,13 +112,22 @@ void PanelAlignmentMatrixApply(IMUdata aS, IMUdata *aB_out, IMUdata ref);
 
 void gyroHardwareCalibrationToZero()
 {
+    uint8_t prev_ctrl7 = QMI8658_receive(QMI8658_CTRL7);
+#ifdef RB_ENABLE_CONSOLE_DEBUG
+    printf("Gyro Calibration to Zero... %02X\n", prev_ctrl7);
+#endif
     QMI8658_transmit(QMI8658_CTRL7, 0x00);
     QMI8658_CTRL9_Write(0xA2);
-    QMI8658_transmit(QMI8658_CTRL7, 0x83);
+    QMI8658_transmit(QMI8658_CTRL7, prev_ctrl7);
 }
 
 void gyroHardwareSetCalibration(float x, float y, float z)
 {
+    /* Save previous CTRL7, clear it to allow calibration writes */
+    uint8_t prev_ctrl7 = QMI8658_receive(QMI8658_CTRL7);
+#ifdef RB_ENABLE_CONSOLE_DEBUG
+    printf("Gyro Calibration to... %f %f %f\n", x, y, z);
+#endif    
     QMI8658_transmit(QMI8658_CTRL7, 0x00);
     uint16_t regval[3];
 
@@ -140,7 +150,28 @@ void gyroHardwareSetCalibration(float x, float y, float z)
 
     // Issue command to apply gyro delta offset
     QMI8658_CTRL9_Write(0x0A);
-    QMI8658_transmit(QMI8658_CTRL7, 0x83);
+
+    /* Restore previous CTRL7 */
+    QMI8658_transmit(QMI8658_CTRL7, prev_ctrl7);
+
+
+#ifdef RB_ENABLE_CONSOLE_DEBUG
+    /* Dump gyro config and calibration registers for debugging */
+    {
+        uint8_t ctrl3 = QMI8658_receive(QMI8658_CTRL3);
+        uint8_t ctrl7 = QMI8658_receive(QMI8658_CTRL7);
+        uint8_t cal1l = QMI8658_receive(QMI8658_CAL1_L);
+        uint8_t cal1h = QMI8658_receive(QMI8658_CAL1_H);
+        uint8_t cal2l = QMI8658_receive(QMI8658_CAL2_L);
+        uint8_t cal2h = QMI8658_receive(QMI8658_CAL2_H);
+        uint8_t cal3l = QMI8658_receive(QMI8658_CAL3_L);
+        uint8_t cal3h = QMI8658_receive(QMI8658_CAL3_H);
+        int16_t cal1 = (int16_t)((cal1h << 8) | cal1l);
+        int16_t cal2 = (int16_t)((cal2h << 8) | cal2l);
+        int16_t cal3 = (int16_t)((cal3h << 8) | cal3l);
+        printf("QMI8658 Debug - CTRL3=0x%02X CTRL7=0x%02X CAL1=%d CAL2=%d CAL3=%d\n", ctrl3, ctrl7, cal1, cal2, cal3);
+    }
+#endif
 }
 /**
  * Inialize Wire and send default configs

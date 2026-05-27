@@ -110,10 +110,31 @@ void diameterEndpoints(float cx, float cy, float r, float angleDeg, Point *A, Po
 
 void lit(int8_t *matrix, float p, float r, uint8_t sizeRow, lv_obj_t **tiles)
 {
-    float radiansP = p * PI / 180.0f;
+    // Normalize pitch to [-180,180)
+    float wrapped = fmodf(p, 360.0f);
+    if (wrapped > 180.0f)
+        wrapped -= 360.0f;
 
-    //
-    //
+    // Map pitch into [-90,90] while recording if the view is inverted
+    int invert = 0;
+    float effectivePitch;
+    if (wrapped > 90.0f)
+    {
+        effectivePitch = -180.0f + wrapped; // collapse to [0..90]
+        invert = 1;
+    }
+    else if (wrapped < -90.0f)
+    {
+        effectivePitch = 180.0f + wrapped; // collapse to [-90..0]
+        invert = 1;
+    }
+    else
+    {
+        effectivePitch = wrapped;
+    }
+
+    float radiansP = effectivePitch * PI / 180.0f;
+
     float isLineBelow = sinf(radiansP) * sizeRow / 2.0f;
     float centerX = sizeRow / 2.0f;
     float centerY = sizeRow / 2.0f + isLineBelow;
@@ -129,26 +150,28 @@ void lit(int8_t *matrix, float p, float r, uint8_t sizeRow, lv_obj_t **tiles)
             {
                 continue;
             }
-            float px = x + 0.5;
-            float py = y + 0.5;
+            float px = x + 0.5f;
+            float py = y + 0.5f;
             int8_t newLit = pointAboveOrBelow(A.x, A.y, B.x, B.y, px, py);
+
+            // If pitch is beyond +/-90 degrees the sky/ground sides swap
+            if (invert)
+                newLit = 1 - newLit;
+
             if (matrix[y * sizeRow + x] == newLit)
             {
+                continue;
+            }
+
+            matrix[y * sizeRow + x] = newLit;
+
+            if (newLit == 0)
+            {
+                lv_obj_set_style_bg_color(tiles[y * sizeRow + x], lv_color_make(128, 48, 0), 0);
             }
             else
             {
-                matrix[y * sizeRow + x] = newLit;
-
-                if (newLit == 0)
-                {
-                    // lv_obj_add_flag(tiles[y * sizeRow + x], LV_OBJ_FLAG_HIDDEN);
-                    lv_obj_set_style_bg_color(tiles[y * sizeRow + x], lv_color_make(128, 48, 0), 0);
-                }
-                else
-                {
-                    // lv_obj_clear_flag(tiles[y * sizeRow + x], LV_OBJ_FLAG_HIDDEN);
-                    lv_obj_set_style_bg_color(tiles[y * sizeRow + x], lv_color_make(32, 168, 224), 0);
-                }
+                lv_obj_set_style_bg_color(tiles[y * sizeRow + x], lv_color_make(32, 168, 224), 0);
             }
         }
     }
@@ -203,10 +226,28 @@ int8_t RB02_AdvancedAttitude_SkyMatrixAlign(RB02_AdvancedAttitude_Status *aaStat
             }
         }
     }
-    //
-    //
+    /* Determine if pitch causes an inverted view (beyond +/-90 degrees)
+       and store the flag in status so other UI elements can adjust roll. */
+    float scaledPitch = pitch * (rp / 10.0f);
+    float wrappedPitch = fmodf(scaledPitch, 360.0f);
+    if (wrappedPitch > 180.0f)
+        wrappedPitch -= 360.0f;
+    int invert = 0;
+    if (wrappedPitch > 90.0f){
+        invert = 1;
+    }
+    else if (wrappedPitch < -90.0f){
+        invert = 1;
+    } else {
+    }
+    aaStatus->SkyInverted = invert;
 
-    lit(aaStatus->SkyMatrix, pitch * (rp / 10.0), -roll * (rr / 10.0), RB_AAT_SKY_TILES, aaStatus->SkyTiles);
+    float matrixRoll = -roll * (rr / 10.0f);
+    if (invert)
+        matrixRoll = -matrixRoll;
+
+    lit(aaStatus->SkyMatrix, scaledPitch, matrixRoll, RB_AAT_SKY_TILES, aaStatus->SkyTiles);
+    //
     return 0;
 }
 
@@ -214,14 +255,21 @@ int8_t RB02_AdvancedAttitude_SkyMatrixAlign(RB02_AdvancedAttitude_Status *aaStat
 
 void RB02_AdvancedAttitude_LinesAlign(RB02_AdvancedAttitude_Status *aaStatus, float pitch, float roll)
 {
-    float moveY = 4.0 * pitch;
-    lv_obj_set_pos(aaStatus->Lines, 0, moveY);
-    lv_img_set_angle(aaStatus->lv_roll, -roll * 10.0);
+    if(pitch > 90){
+        pitch -= 180;
+    } else if(pitch < -90){
+        pitch += 180;
+    }
 
-    lv_img_set_angle(aaStatus->AttitudeLine, -roll * 10.0);
+    float moveY = 4.0 * pitch;
+    float displayRoll = aaStatus->SkyInverted ? (-roll+180) : roll;
+    lv_obj_set_pos(aaStatus->Lines, 0, moveY);
+    lv_img_set_angle(aaStatus->lv_roll, -displayRoll * 10.0);
+
+    lv_img_set_angle(aaStatus->AttitudeLine, -displayRoll * 10.0);
     lv_obj_set_pos(aaStatus->AttitudeLine, 0, moveY);
 }
-
+/*
 //
 void RB02_AdvancedAttitude_RollPitchAlign(RB02_AdvancedAttitude_Status *aaStatus, float pitch, float roll)
 {
@@ -237,12 +285,13 @@ void RB02_AdvancedAttitude_RollPitchAlign(RB02_AdvancedAttitude_Status *aaStatus
     }
 
     // 1.1.1 Rotation of Aircraft symbol
-    lv_img_set_angle(aaStatus->lv_pitch, -roll * 10.0);
+    float displayRoll = aaStatus->SkyInverted ? -roll : roll;
+    lv_img_set_angle(aaStatus->lv_pitch, -displayRoll * 10.0);
     lv_obj_set_pos(aaStatus->lv_pitch, 0, -moveY + lv_obj_get_height(aaStatus->lv_pitch) / 2);
 
-    lv_img_set_angle(aaStatus->lv_roll, -roll * 10.0);
+    lv_img_set_angle(aaStatus->lv_roll, -displayRoll * 10.0);
 }
-
+*/
 int16_t RB02_AdvancedAttitude_MoveItems(lv_obj_t *item, int16_t degree, int16_t displacementX, int16_t displacementY)
 {
     int16_t sin = lv_trigo_sin(degree - 90) / 327;
