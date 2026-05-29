@@ -21,17 +21,27 @@
  * 03 -> Display with Autopilot, ADSB, Radio, Flight Computer
  * 04 -> Display with EMS: Engine monitoring system
  * 05 -> Display with Stratux BLE Traffic
+ * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+ * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  *
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available
  *
+ * More about in https://www.rbavionics.com and Discord community
 */
 
 #include <stdio.h>
+#include <string.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "esp_system.h"
+#include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "RB/RB02_Defines.h"
 #include "TCA9554PWR.h"
 #include "RB02_DriverFactory.h"
@@ -169,6 +179,22 @@ void Driver_Init(void)
         NULL,
         0);
 }
+
+#if defined(RB_DISPLAY_DEBUG) ||  defined(RB_TOUCH_DEBUG)
+    lv_obj_t *RB_Touch_Debug_Label = NULL;
+void RB_Debug_Update_Label(int x,int y,int c)
+{
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d,%d,%d", x, y, c);
+    lv_label_set_text(RB_Touch_Debug_Label, buf);
+}
+#endif
+
+#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)
+// External Commercial feature - USB Console input thread for FLARM and NMEA parsing
+#include "RB_Usb.c"
+#endif
+
 void RB02_Main();
 void Set_Backlight(uint8_t Light);
 void app_main(void)
@@ -181,13 +207,25 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     Driver_Init();
-    
+
+#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)
+    setvbuf(stdin, NULL, _IONBF, 0);
+    // Create USB Console input thread
+    xTaskCreatePinnedToCore(
+        usb_console_input_thread,
+        "USB Console Task",
+        4096,
+        NULL,
+        5,
+        NULL,
+        1);
+#endif
 #ifdef RB_ENABLE_UART
     // 1.0.9
     // Install the UART Driver as soon as possible
     uart_driver_install(UART_N, 256, 0, 0, NULL, 0);
     // Set PIN for Waveshare 2.8" Round based on Wiki Schematics
-    uart_set_pin(1, UART_PIN_NO_CHANGE, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_set_pin(UART_N, UART_PIN_NO_CHANGE, RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 #endif
 
     LCD_Init();
@@ -200,7 +238,7 @@ void app_main(void)
     /********************* Demo *********************/
     if (LVGL_lock(-1)) {
 
-#ifdef RB_DISPLAY_DEBUG
+#if defined(RB_DISPLAY_DEBUG) ||  defined(RB_TOUCH_DEBUG)
     const int DisplayDebugTrue = true;
 #else
     const int DisplayDebugTrue = false;
@@ -208,8 +246,21 @@ void app_main(void)
     if (DisplayDebugTrue) // Display test minimal routine
     {
 
+#if defined(RB_DISPLAY_DEBUG) ||  defined(RB_TOUCH_DEBUG)
         Set_Backlight(100);
         lv_obj_set_style_bg_color(lv_scr_act(), lv_color_make(255, 0, 0), 0);
+
+        lv_obj_t *VersionLabel = lv_label_create(lv_scr_act());
+        lv_obj_set_size(VersionLabel, 480, 150);
+        lv_obj_align(VersionLabel, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_set_style_text_font(VersionLabel, &lv_font_montserrat_48, 0);
+        lv_obj_set_style_text_align(VersionLabel, LV_TEXT_ALIGN_CENTER, 0);
+        lv_label_set_text(VersionLabel, "TOUCH THE SCREEN");
+        lv_obj_set_style_text_color(VersionLabel, lv_color_white(), LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    RB_Touch_Debug_Label = VersionLabel;
+#endif
+
     }
     else
     {

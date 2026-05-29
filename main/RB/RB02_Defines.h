@@ -40,8 +40,6 @@
 #define RB_02_DISPLAY_40 40
 
 
-// 1.2.1
-//#define RB_02_28_WORKAROUND_BLACKSCREEN 1
 
 #define RB_LICENSE_TYPE_COMMUNITY   0
 #define RB_LICENSE_TYPE_COMMERCIAL  1
@@ -52,6 +50,9 @@
 //#define RB_02_DISPLAY_TOUCH 1
 #define RB_ENABLE_SETUP 1
 
+#ifndef RB_TOUCH_WORKAROUND_MAX_X
+#define RB_TOUCH_WORKAROUND_MAX_X 65534
+#endif
 //  1.1.3 Supports for 2.1 and 2.8 displays
 //#define RB_02_DISPLAY_SIZE RB_02_DISPLAY_28
 
@@ -69,6 +70,8 @@
 #define RB_PRODUCT_TITLE "RB 04"
 #elif RB_PRODUCT_LINE == 5
 #define RB_PRODUCT_TITLE "RB 05"
+#elif RB_PRODUCT_LINE == 7
+#define RB_PRODUCT_TITLE "RB 07"
 #else
 #error Product not found
 #endif
@@ -97,7 +100,7 @@
 
 // 1.1.23 GPS Diagnostic Screen
 //#define RB_ENABLE_GPS_DIAG 1
-//#define RB_ENABLE_CONSOLE_DEBUG 1
+#define RB_ENABLE_CONSOLE_DEBUG 1
 
 
 
@@ -111,6 +114,11 @@
 #define RB02_BLUETOOTH_DIAG 1                    // ONLY FOR PERSONAL USE this feature is under Partner contract, if you want to sell this you shall have the dual licensing
 #endif
 
+#ifdef RB_ENABLE_USB_FLARM
+#define RB05_Flarm_SERIAL 10
+#define RB_ENABLE_TRAFFIC RB05_Flarm_SERIAL 
+#endif
+
 
 
 // 1.1.2 Version is here
@@ -120,6 +128,11 @@
 #ifdef RB02_ESP_BLUETOOTH
 #define RB01_GPS_PROTOCOL_BLE   2
 #define RB01_GPS_PROTOCOL RB01_GPS_PROTOCOL_BLE
+#endif
+
+#ifdef RB_ENABLE_USB_NMEA
+#define RB01_GPS_PROTOCOL_USB 3
+#define RB01_GPS_PROTOCOL RB01_GPS_PROTOCOL_USB
 #endif
 
 #ifdef RB_ENABLE_UART

@@ -5,6 +5,13 @@ The RB is the Open-source Aviation instruments suite, the models are divided by 
 - RB-03 -> Display with Autopilot, ADSB, Radio, Flight Computer
 - RB-04 -> Display with EMS: Engine monitoring system
 - RB-05 -> Display with Stratux BLE Traffic (this repo)
+- RB-06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+- RB-07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+- RB-08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+- RB-Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
+
+More about in https://www.rbavionics.com and Discord community
+
 
 ## Community
 The RB Avionics is a complete avionics project which is supported by a huge community worldwide, read the Wiki and if you need support join the Discord channel.
@@ -64,13 +71,15 @@ We added a "vibration" correction setup: please verify with your mechanic which 
 - chip esp32s3
 - flash_mode dio
 - flash_size 16MB
-- 0x0 bootloader.bin
-- 0x10000 Application Binary
-- 0x8000 partition-table.bin
+- 0x0 Application Binary
 
 If you have problems check Youtube guides and try a "full clear" during flash
 
 ## License
+Community edition will be free for all builders and personal use as defined by the licensing model
+ 
+Dual licensing for commercial agreement is available
+
 This project is licensed under DUAL license:
 1. the GNU AGPLv3. See the LICENSE file for details.
 2. commercial agreement

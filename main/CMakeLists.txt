@@ -40,6 +40,7 @@ idf_component_register(
                               "BAT_Driver/BAT_Driver.c"
                               "sc16is750/sc16is750.c"
                               "MS4525DO/ms4525do_rb.c"
+                              "RB/RB_License.c"
 
                         INCLUDE_DIRS "./EXIO"
                                      "./LCD_Driver"
@@ -60,5 +61,6 @@ idf_component_register(
                                      "./BME680"
                                      "./sc16is750"
                                      "./MS4525DO"
+                                     "./esp_lcd_sh8601/include"
                                      "."
                         )
