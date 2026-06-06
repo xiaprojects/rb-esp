@@ -91,6 +91,24 @@ typedef struct {
     uint8_t second;
 }datetime_t;
 
+#ifdef RB_ENABLE_EMS
+#define RB_EMS_VERTICAL_BARS_NUMBER 4
+typedef struct
+{
+    uint16_t rpm;
+    uint8_t manifoldPressure;
+    int16_t oilTemperature;
+    uint8_t oilPressure;
+    int16_t coolantTemperature;
+    int16_t outTemperature;
+    uint8_t fuelLevel;
+    uint8_t batteryVoltage;
+    int16_t chtCelsius[RB_EMS_VERTICAL_BARS_NUMBER];
+    int16_t egtCelsius[RB_EMS_VERTICAL_BARS_NUMBER];
+    uint8_t obsoleteData; /* Incremented at each update, used to detect if data is fresh or not */
+} RB04_EMSData;
+#endif
+
 #ifdef RB_ENABLE_TRK
 typedef struct
 {
@@ -134,6 +152,7 @@ typedef struct
 #endif
 #ifdef RB_ENABLE_EMS
   lv_obj_t *tEMS;
+  uint8_t displayFarenheit;
 #endif
     lv_obj_t *panelMountAlignmentLabelPitch;
     lv_obj_t *panelMountAlignmentLabelRoll;
@@ -147,7 +166,8 @@ typedef struct
     lv_obj_t *labelIASSpeed;
 #endif
 #endif
-
+    lv_obj_t *SettingStatus4UART;
+    uint8_t SettingStatus4UARTIsFault;
 } RB02_UI;
 
 typedef struct
@@ -167,8 +187,12 @@ typedef struct
 #ifdef RB_ENABLE_DATALOGGER
     uint8_t settingsEnableDataLoggerRecording;
 #endif
+    uint8_t settingsEnableNMEAOutput;
 #ifdef RB_ENABLE_GPS
     gps_t NMEA_DATA;
+#endif
+#ifdef RB_ENABLE_EMS
+  RB04_EMSData lastEmsData;
 #endif
 #ifdef RB_ENABLE_MAP
 RB02_GpsMapStatus gpsMapStatus;

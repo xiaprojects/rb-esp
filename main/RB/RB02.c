@@ -213,8 +213,9 @@ extern float GPSLateralYAcceleration;
 extern bool GPSIsReliable;
 int64_t GPSDT = 0;
 extern float q0, q1, q2, q3;
-
+#ifdef RB_ENABLE_UART
 int32_t GpsSpeed0ForDisable = 0;
+#endif
 float GPSLastSpeedKmhForAttitudeComponesation = 0;
 int64_t GPSLastSpeedKmhReceivedTick = -20000000;
 float GPSCurrentSpeedKmhForAttitudeComponesation = 0;
@@ -281,8 +282,9 @@ void example1_BMP280_lvgl_tick(lv_timer_t *t);
 uint8_t Operative_GPS = 0;
 uint8_t Operative_BMP280 = 0;
 uint8_t Operative_Attitude = 0;
-
+#ifdef RB_ENABLE_UART
 lv_obj_t *uartDropDown = NULL;
+#endif
 lv_obj_t *kmhDropDown = NULL;
 lv_obj_t *SettingStatus0 = NULL;
 lv_obj_t *SettingStatus1 = NULL;
@@ -290,9 +292,7 @@ lv_obj_t *SettingStatus1 = NULL;
 lv_obj_t *SettingStatus3 = NULL;
 lv_obj_t *SettingStatus4 = NULL;
 lv_obj_t *SettingStatus5 = NULL;
-lv_obj_t *SettingStatus4UART = NULL;
 
-// char SettingStatus4UARTBuf[20];
 lv_style_t style_title;
 lv_obj_t *SettingLabelFilter = NULL;
 lv_obj_t *SettingsEngineTimeLabel = NULL;
@@ -431,6 +431,9 @@ void ApplyCoding(void)
   StartupPage = RB02_TAB_SET - 1;
 #endif
 }
+
+
+const char *RB_Generate_ModelString(char *buffer, size_t bufferSize);
 
 #ifdef RB_ENABLE_MAP
 lv_obj_t *t0 = NULL;
@@ -592,30 +595,30 @@ void RB02_Example1(void)
 
   // 1.1.3 Display unique serial number for device tracking
   esp_efuse_mac_get_default((uint8_t *)(&_chipmacid));
-#ifdef RB_ENABLE_CONSOLE_DEBUG
-  int8_t hasGPS = 0;
 #ifdef RB_ENABLE_GPS
-  hasGPS = 1;
 #endif
-  printf("$RB,02,%d,%s,%d,%llX\n", RB_02_DISPLAY_SIZE, RB_VERSION, hasGPS, _chipmacid);
-#endif
-
+  uint8_t licensePrintStatus = 0;
 #if RB_LICENSE_TYPE == RB_LICENSE_TYPE_COMMERCIAL
   uint64_t license = 0;
-  printf("Searching for RB License: %llX\n", _chipmacid);
   singletonConfig()->licenseValid = read_license_text(&license);
   if(singletonConfig()->licenseValid==true){
     singletonConfig()->licenseValid = licenseValidated(_chipmacid,license);
-    printf("License: %llX result: %d\n", license, singletonConfig()->licenseValid);
+    //printf("License: %llX result: %d\n", license, singletonConfig()->licenseValid);
+    licensePrintStatus = 1;
   } else {
-    printf("License not found\n");
+    //printf("License not found\n");
+    licensePrintStatus = 0;
   }
   if(singletonConfig()->licenseValid==false){
-    printf("License not compatible\n");
+    //printf("License not compatible\n");
+    licensePrintStatus = 2;
   }
-#else
-  printf("License if COMMUNITY FREE for NON Commercial (%d)\n", RB_LICENSE_TYPE);
 #endif
+
+char modelString[50];
+char hello[100];
+snprintf(hello,sizeof(hello),"$RB,%d,%d,%s,%s,%llX,%d,%d",RB_PRODUCT_LINE, RB_02_DISPLAY_SIZE, RB_VERSION, RB_Generate_ModelString(modelString,sizeof(modelString)), _chipmacid, RB_LICENSE_TYPE,licensePrintStatus);
+printf("%s*%02X\n", hello,nmeaChecksum(hello));
 
 #ifdef RB_ENABLE_CHECKLIST
   RB02_Checklist_CreateScreen(tChecklist, "/sdcard/check.txt");
@@ -764,7 +767,7 @@ void nmea_GGA_UpdatedValueFor(uint8_t csvCounter, int32_t finalNumber, uint8_t d
 #endif
             if (SuggestedQNH - QNH < 10 && SuggestedQNH - QNH > -10)
             {
-              if (abs(SuggestedQNH - QNH) > 0)
+              if (SuggestedQNH - QNH > 1 || SuggestedQNH - QNH < -1)
               {
                 QNH = RB02_SuggestedQNH(singletonConfig()->NMEA_DATA.altitude, bmp280Pressure);
                 RB02_AltimeterQNHUpdated();
@@ -924,7 +927,7 @@ void nmea_RMC_UpdatedValueFor(uint8_t csvCounter, int32_t finalNumber, uint8_t d
   }
 }
 
-bool nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
+uint16_t nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
 {
   int64_t now = esp_timer_get_time();
   GPSDT = (now - GPSLastSpeedKmhReceivedTick);
@@ -934,8 +937,8 @@ bool nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
   int8_t decimalEnabled = 0;
 
   int32_t finalNumber = 0;
-
-  for (uint8_t x = 0; x < length; x++)
+  uint8_t x = 0;
+  for (; x < length; x++)
   {
     if (sentence[x] == 0)
       break;
@@ -970,10 +973,10 @@ bool nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
 
   GPSLastSpeedKmhReceivedTick = now;
 
-  return true;
+  return x;
 }
 
-bool nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
+uint16_t nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
 {
 
   int8_t csvCounter = 0;
@@ -981,8 +984,8 @@ bool nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
   int8_t decimalCounter = 0;
   int8_t decimalEnabled = 0;
   int32_t finalNumber = 0;
-
-  for (uint8_t x = 0; x < length; x++)
+  uint8_t x = 0;
+  for (; x < length; x++)
   {
     if (sentence[x] == 0)
       break;
@@ -1016,7 +1019,7 @@ bool nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
     }
   }
 
-  return true;
+  return x;
 }
 
 #endif
@@ -1106,11 +1109,19 @@ void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
       {
         if (strncmp((char *)(data + x + 1), "GPRMC,", 5) == 0 || strncmp((char *)(data + x + 1), "GNRMC,", 5) == 0)
         {
-          lv_label_set_text(SettingStatus4UART, "DATA RECEIVED");
-          if (nmea_RMC_mini_parser(data + x, rxBytes - x))
+          if(singletonConfig()->ui.SettingStatus4UARTIsFault==1){
+            singletonConfig()->ui.SettingStatus4UARTIsFault=0;
+            lv_label_set_text(singletonConfig()->ui.SettingStatus4UART, "DATA RECEIVED");
+          }
+          uint16_t parsedLength = nmea_RMC_mini_parser(data + x, rxBytes - x);
+          if (parsedLength > 0 && parsedLength < rxBytes - x)
           {
-            // TODO: jump directly to the slice
-            // break;
+            if (singletonConfig()->settingsEnableNMEAOutput != 0)
+            {
+              ((char *)(data + x + parsedLength))[0] = 0;
+              printf("%s\n", (char *)(data + x));
+            }
+            x+= parsedLength;
           }
 #ifdef RB_ENABLE_GPS_DIAG
           if (GPSDiag_NMEADebugRMC != NULL)
@@ -1124,8 +1135,14 @@ void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
         {
           if (strncmp((char *)(data + x + 1), "GPGGA,", 5) == 0 || strncmp((char *)(data + x + 1), "GNGGA,", 5) == 0)
           {
-            if (nmea_GGA_mini_parser(data + x, rxBytes - x))
+            uint16_t parsedLength = nmea_GGA_mini_parser(data + x, rxBytes - x);
+            if (parsedLength > 0 && parsedLength < rxBytes - x)
             {
+              if(singletonConfig()->settingsEnableNMEAOutput != 0){
+                ((char *)(data + x+parsedLength))[0]=0;
+                printf("%s\n", (char *)(data + x));
+              }
+              x+= parsedLength;
               // TODO: jump directly to the slice
               // break;
             }
@@ -1211,7 +1228,6 @@ void nvsRestoreGMeter()
       printf("Error (%s) reading!\n", esp_err_to_name(err));
     }
 
-    printf("G-Meter read: %d %d\n",gmeter_max,gmeter_min);
     nvs_close(my_handle);
   }
 }
@@ -1278,7 +1294,7 @@ void nvsRestoreSettings()
       DeviceIsDemoMode = 0;
       StartupPage = defaultPageOrDemo;
     }
-
+#ifdef RB_ENABLE_UART
     // 1.1.23 GPS is mandatory
     GpsSpeed0ForDisable = 9600;
 
@@ -1295,7 +1311,7 @@ void nvsRestoreSettings()
     default:
       printf("Error (%s) reading!\n", esp_err_to_name(err));
     }
-
+#endif
     GFactorDirty = 0;
 
     nvs_get_u8(my_handle, "isKmh", &isKmh);
@@ -1390,7 +1406,12 @@ void nvsRestoreSettings()
 
     singletonConfig()->qnhIsInInches = 0;
     nvs_get_u8(my_handle, "qnhInches", &singletonConfig()->qnhIsInInches);
-
+    singletonConfig()->settingsEnableNMEAOutput = 0;
+    nvs_get_u8(my_handle, "nmeaOut", &singletonConfig()->settingsEnableNMEAOutput);
+#ifdef RB_ENABLE_EMS
+    singletonConfig()->ui.displayFarenheit = 0;
+    nvs_get_u8(my_handle, "isFarenheit", &singletonConfig()->ui.displayFarenheit);
+#endif
     nvs_close(my_handle);
   }
 }
@@ -1429,7 +1450,7 @@ void nvsStoreSpeedArc()
     nvs_close(my_handle);
   }
 }
-
+#ifdef RB_ENABLE_UART
 void nvsStoreUARTBaudrate()
 {
   //
@@ -1446,7 +1467,7 @@ void nvsStoreUARTBaudrate()
     nvs_close(my_handle);
   }
 }
-
+#endif
 // 1.1.8
 void nvsStoreFilters()
 {
@@ -1461,23 +1482,15 @@ void nvsStoreFilters()
   {
     // Write
     uint8_t intBuffer = FilterMoltiplier;
-    printf("Writing filterAcc from NVS ... %d\n", intBuffer);
     nvs_set_u8(my_handle, "filterAcc", intBuffer);
     intBuffer = FilterMoltiplierGyro;
-    printf("Writing filterGyro from NVS ... %d\n", intBuffer);
     nvs_set_u8(my_handle, "filterGyro", intBuffer);
     intBuffer = 250 * AttitudeBalanceAlpha;
-    printf("Writing filterAttitude from NVS ... %d\n", intBuffer);
     nvs_set_u8(my_handle, "filterAttitude", intBuffer);
-
-    printf("Writing DriverLoopMilliseconds from NVS ... %d\n", DriverLoopMilliseconds);
     nvs_set_u8(my_handle, "loopms", DriverLoopMilliseconds);
-
     // 1.1.23
     intBuffer = FilterMoltiplierOutput;
-    printf("Writing filterOut from NVS ... %d\n", intBuffer);
     nvs_set_u8(my_handle, "filterOut", intBuffer);
-
     nvs_close(my_handle);
   }
 }
@@ -1809,11 +1822,12 @@ void update_Altimeter_lvgl_tick(lv_timer_t *t)
 #endif
 }
 #endif
-#ifdef RB_ENABLE_GPS
+#ifdef RB_ENABLE_UART
 void uartApplyRates()
 {
   // snprintf(SettingStatus4UARTBuf,sizeof(SettingStatus4UARTBuf),"NO DATA RECEIVED");
-  lv_label_set_text(SettingStatus4UART, "NO DATA RECEIVED");
+  singletonConfig()->ui.SettingStatus4UARTIsFault = 1;
+  lv_label_set_text(singletonConfig()->ui.SettingStatus4UART, "NO DATA RECEIVED");
 #ifdef RB_ENABLE_GPS_DIAG
   if (GPSDiag_UARTBaud != NULL)
   {
@@ -1960,6 +1974,14 @@ void RB02_CreateScreens()
 #ifdef ENABLE_SCREENSHOTS
 esp_err_t lvgl8_save_screen_bmp_to_sd(const char *path);
 #endif
+
+void memRandom(void *ptr, size_t size)
+{
+    unsigned char *p = (unsigned char *)ptr;
+    for (size_t i = 0; i < size; i++) {
+        p[i] = (unsigned char)(rand() & 0xFF);
+    }
+}
 
 void rb_increase_lvgl_tick(lv_timer_t *t)
 {
@@ -2115,7 +2137,7 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
       stopwatch = datetime;
       break;
     case 91:
-#ifdef RB_ENABLE_GPS
+#ifdef RB_ENABLE_UART
       uartApplyRates();
       switch (GpsSpeed0ForDisable)
       {
@@ -2144,8 +2166,6 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
       snprintf(ConsoleLogBuffer, sizeof(ConsoleLogBuffer), "UART %ld", GpsSpeed0ForDisable);
       RB02_Console_AppendLog(RB02_LOG_MAIN, RB02_LOG_INFO, ConsoleLogBuffer);
 #endif
-#else
-      GpsSpeed0ForDisable = 0;
 #endif
       break;
     case 99:
@@ -2330,12 +2350,25 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
 #endif
 #ifdef RB_ENABLE_EMS
   case RB02_TAB_EMS:
+    //RB04_EMSData emsStatus;
+    //memRandom(&emsStatus, sizeof(emsStatus));
+    singletonConfig()->lastEmsData.obsoleteData++ ;
+    RB04_EMS_Tick(singletonConfig(), &singletonConfig()->lastEmsData);
+    if(singletonConfig()->lastEmsData.obsoleteData>30)
+    {
+      singletonConfig()->lastEmsData.obsoleteData = 30;
+      if (OperativeWarningVisible == false)
+      {
+        lv_obj_clear_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
+        OperativeWarningVisible = true;
+      }
+    } else {
     if (OperativeWarningVisible == true)
     {
       lv_obj_add_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
       OperativeWarningVisible = false;
     }
-    RB04_EMS_Tick(singletonConfig()->ui.ems);
+    }
     break;
 #endif
 #ifdef RB_ENABLE_MAP
@@ -2644,6 +2677,29 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
   }
   break;
   }
+
+  if(singletonConfig()->settingsEnableNMEAOutput != 0){
+    char buf[180];
+        snprintf(buf, sizeof(buf),"$RBATT,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
+               AttitudeRoll,
+               AttitudePitch,
+               AttitudeYaw,
+               AccelFiltered.x,
+               AccelFiltered.y,
+               AccelFiltered.z,
+               GyroFiltered.x,
+               GyroFiltered.y,
+               GyroFiltered.z,
+               GPSAccelerationForAttitudeCompensation,
+               GPSLateralYAcceleration,
+               0.0,
+               0.0,
+               0.0,
+               0.0,
+               0.0,
+               AttitudeBalanceAlphaAerobatics);
+        printf("%s*%02X\n", buf,nmeaChecksum(buf));
+        }
 }
 
 static void mbox1_timer_reset(lv_event_t *e)
@@ -3192,18 +3248,6 @@ static void GPSAccelerationForAttitudeCompensationEnabledChanged(lv_event_t *e)
   }
 }
 
-static void AttitudeMadwickChanged(lv_event_t *e)
-{
-  lv_obj_t *sw = (lv_obj_t *)lv_event_get_user_data(e);
-  if (lv_obj_get_state(sw) & LV_STATE_CHECKED)
-  {
-    EnableAttitudeMadgwick = 1;
-  }
-  else
-  {
-    EnableAttitudeMadgwick = 0;
-  }
-}
 
 static void AltimeterOverrideChanged(lv_event_t *e)
 {
@@ -3390,7 +3434,7 @@ static void event_handler_kmh_menu(lv_event_t *e)
     nvsStoreSpeedArc();
   }
 }
-#ifdef RB_ENABLE_GPS
+#ifdef RB_ENABLE_UART
 static void event_handler_gps_menu(lv_event_t *e)
 {
   lv_event_code_t code = lv_event_get_code(e);
@@ -3822,26 +3866,6 @@ static void Onboard_create_Setup(lv_obj_t *parent)
 
   if (true)
   {
-    lv_obj_t *DisableFilteringLabel = lv_label_create(parent);
-    lv_obj_set_size(DisableFilteringLabel, 150, 16);
-    lv_obj_align(DisableFilteringLabel, LV_ALIGN_CENTER, -75, lineY);
-    lv_obj_set_style_text_align(DisableFilteringLabel, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_obj_set_style_text_font(DisableFilteringLabel, &lv_font_montserrat_16, 0);
-    lv_label_set_text(DisableFilteringLabel, "Madgwick");
-    lv_obj_add_style(DisableFilteringLabel, &style_title, LV_STATE_DEFAULT);
-    lv_obj_t *sw = lv_switch_create(parent);
-    if (EnableAttitudeMadgwick == true)
-    {
-      lv_obj_add_state(sw, LV_STATE_CHECKED);
-    }
-    lv_obj_set_size(sw, 65, 40);
-    lv_obj_align(sw, LV_ALIGN_CENTER, 40, lineY);
-    lv_obj_add_event_cb(sw, AttitudeMadwickChanged, LV_EVENT_VALUE_CHANGED, sw);
-    lineY += 40;
-  }
-
-  if (true)
-  {
     SettingStatus0 = lv_label_create(parent);
     lv_obj_set_size(SettingStatus0, 400, 20);
     lv_obj_align(SettingStatus0, LV_ALIGN_CENTER, 0, lineY);
@@ -3904,7 +3928,7 @@ static void Onboard_create_Setup(lv_obj_t *parent)
     lv_obj_add_style(SettingStatus4, &style_title, LV_STATE_DEFAULT);
     lineY += 20;
   }
-#ifdef RB_ENABLE_GPS
+#ifdef RB_ENABLE_UART
   if (true)
   {
     lineY += 20;
@@ -3922,30 +3946,33 @@ static void Onboard_create_Setup(lv_obj_t *parent)
 
     lineY += 30;
   }
-
+#endif
+#ifdef RB_ENABLE_GPS
   if (true)
   {
-    SettingStatus4UART = lv_label_create(parent);
-    lv_obj_set_size(SettingStatus4UART, 400, 20);
-    lv_obj_align(SettingStatus4UART, LV_ALIGN_CENTER, 0, lineY);
-    lv_obj_set_style_text_font(SettingStatus4UART, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_align(SettingStatus4UART, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(SettingStatus4UART, &style_title, LV_STATE_DEFAULT);
+    singletonConfig()->ui.SettingStatus4UART = lv_label_create(parent);
+    lv_obj_set_size(singletonConfig()->ui.SettingStatus4UART, 400, 20);
+    lv_obj_align(singletonConfig()->ui.SettingStatus4UART, LV_ALIGN_CENTER, 0, lineY);
+    lv_obj_set_style_text_font(singletonConfig()->ui.SettingStatus4UART, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(singletonConfig()->ui.SettingStatus4UART, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(singletonConfig()->ui.SettingStatus4UART, &style_title, LV_STATE_DEFAULT);
     // snprintf(SettingStatus4UARTBuf,sizeof(SettingStatus4UARTBuf),"NO DATA RECEIVED");
-    lv_label_set_text(SettingStatus4UART, "NO DATA RECEIVED");
+    lv_label_set_text(singletonConfig()->ui.SettingStatus4UART, "NO DATA RECEIVED");
+    singletonConfig()->ui.SettingStatus4UARTIsFault = 1;
 
     lineY += 30;
   }
 #else
   if (true)
   {
-    SettingStatus4UART = lv_label_create(parent);
-    lv_obj_set_size(SettingStatus4UART, 400, 20);
-    lv_obj_align(SettingStatus4UART, LV_ALIGN_CENTER, 0, lineY);
-    lv_obj_set_style_text_font(SettingStatus4UART, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_align(SettingStatus4UART, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_add_style(SettingStatus4UART, &style_title, LV_STATE_DEFAULT);
-    lv_label_set_text(SettingStatus4UART, "GPS NOT ENABLED");
+    singletonConfig()->ui.SettingStatus4UART = lv_label_create(parent);
+    lv_obj_set_size(singletonConfig()->ui.SettingStatus4UART, 400, 20);
+    lv_obj_align(singletonConfig()->ui.SettingStatus4UART, LV_ALIGN_CENTER, 0, lineY);
+    lv_obj_set_style_text_font(singletonConfig()->ui.SettingStatus4UART, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_align(singletonConfig()->ui.SettingStatus4UART, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_style(singletonConfig()->ui.SettingStatus4UART, &style_title, LV_STATE_DEFAULT);
+    lv_label_set_text(singletonConfig()->ui.SettingStatus4UART, "GPS NOT ENABLED");
+    singletonConfig()->ui.SettingStatus4UARTIsFault = 1;
     lineY += 30;
   }
 #endif

@@ -30,7 +30,7 @@
 #ifdef RB_ENABLE_EMS
 #include "lvgl.h"
 lv_obj_t *RB04_EMS_CreateScreen(lv_obj_t *parent, RB02_Status *status);
-void RB04_EMS_Tick(void *status);
+void RB04_EMS_Tick(RB02_Status *status,RB04_EMSData *emsStatus);
 void RB04_EMS_Touch_N(void *status);
 void RB04_EMS_Touch_S(void *status);
 void RB04_EMS_Touch_W(void *status);

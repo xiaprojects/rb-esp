@@ -37,3 +37,4 @@ uint8_t RB02_CheckfileExists(const char *filename);
 
 uint16_t RB02_SuggestedQNH(float GPSAltitudeMeters,int32_t CurrentPressure);
 float nmea_to_decimal(float nmea_coord);
+uint8_t nmeaChecksum(const char *s);

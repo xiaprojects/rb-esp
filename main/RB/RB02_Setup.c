@@ -112,6 +112,10 @@ static void PanelMountYawChanged(lv_event_t *e)
 }
 
 
+#ifdef RB_ENABLE_EMS
+#include "RB04_EMS_Setup.c"
+#endif
+
 void nvsStoreQNHInches(uint8_t isInches)
 {
   //
@@ -143,6 +147,42 @@ static void QNHIsInInches(lv_event_t *e)
   }
     nvsStoreQNHInches(singletonConfig()->qnhIsInInches);
 }
+
+
+
+
+void nvsStoreSettingsEnableNMEAOutputChanged(uint8_t value)
+{
+  //
+  nvs_handle_t my_handle;
+  esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
+  if (err != ESP_OK)
+  {
+    printf("Error (%s) opening NVS handle!\n", esp_err_to_name(err));
+  }
+  else
+  {
+    // Read
+    err = nvs_set_u8(my_handle, "nmeaOut", value);
+    nvs_close(my_handle);
+  }
+}
+
+
+static void SettingsEnableNMEAOutputChanged(lv_event_t *e)
+{
+  lv_obj_t *sw = (lv_obj_t *)lv_event_get_user_data(e);
+  if (lv_obj_get_state(sw) & LV_STATE_CHECKED)
+  {
+    singletonConfig()->settingsEnableNMEAOutput = 1;
+  }
+  else
+  {
+    singletonConfig()->settingsEnableNMEAOutput = 0;
+  }
+  nvsStoreSettingsEnableNMEAOutputChanged(singletonConfig()->settingsEnableNMEAOutput);
+}
+
 
 void nvsStoreBMPAddress(uint8_t address)
 {
@@ -458,6 +498,31 @@ lv_obj_t *RB02_Setup_CreateScreen(RB02_Status *status, lv_obj_t *parent, int *li
     lv_obj_add_event_cb(sw, QNHIsInInches, LV_EVENT_VALUE_CHANGED, sw);
     *lineY += 40;
   }
+
+
+  if (true)
+  {
+    lv_obj_t *DisableFilteringLabel = lv_label_create(parent);
+    lv_obj_set_size(DisableFilteringLabel, 150, 16);
+    lv_obj_align(DisableFilteringLabel, LV_ALIGN_CENTER, -75, *lineY);
+    lv_obj_set_style_text_align(DisableFilteringLabel, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_obj_set_style_text_font(DisableFilteringLabel, &lv_font_montserrat_16, 0);
+    lv_label_set_text(DisableFilteringLabel, "Enable NMEA Output");
+    lv_obj_set_style_text_color(DisableFilteringLabel, lv_color_white(), 0);
+    lv_obj_t *sw = lv_switch_create(parent);
+    if (singletonConfig()->settingsEnableNMEAOutput != 0)
+    {
+      lv_obj_add_state(sw, LV_STATE_CHECKED);
+    }
+    lv_obj_set_size(sw, 65, 40);
+    lv_obj_align(sw, LV_ALIGN_CENTER, 40, *lineY);
+    lv_obj_add_event_cb(sw, SettingsEnableNMEAOutputChanged, LV_EVENT_VALUE_CHANGED, sw);
+    *lineY += 40;
+  }
+
+#ifdef RB_ENABLE_EMS
+  RB02_Setup_CreateScreen_EMS(status, parent,lineY);
+#endif
 
   return NULL;
 }

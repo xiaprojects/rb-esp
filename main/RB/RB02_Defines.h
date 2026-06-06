@@ -100,7 +100,7 @@
 
 // 1.1.23 GPS Diagnostic Screen
 //#define RB_ENABLE_GPS_DIAG 1
-#define RB_ENABLE_CONSOLE_DEBUG 1
+//#define RB_ENABLE_CONSOLE_DEBUG 1
 
 
 
