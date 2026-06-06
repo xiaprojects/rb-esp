@@ -57,6 +57,10 @@
  * 1) Move away the attitude algs and keep this file only as sensor reader
  * 2) Add Magnetometer
  * 3) Get Attitude from RB-01
+ * 
+ * 
+ * Console output for USB connection to RB-01 and RB-03:
+ * $RBATT,roll,pitch,yaw,accelx,accely,accelz,gyrox,gyroy,gyroz,gpsx,gpsy,gpsz,magx,magy,magz,compass,beta*checksum
  *
  */
 #include "QMI8658.h"
@@ -83,6 +87,7 @@ extern float AttitudeYawDegreePerSecond;
 // 1.1.30 HW Calibration IMUdata GyroCalibration;
 // Adjustable parameter: lower = slower yaw correction
 #define YAW_CORRECTION_GAIN 0.01f
+#define YAW_RATE_SMOOTHING_ALPHA 0.01
 
 extern int64_t GPSLastSpeedKmhReceivedTick;
 
@@ -182,7 +187,7 @@ void QMI8658_Init(void)
     uint8_t buf[1];
     Device_addr = QMI8658_L_SLAVE_ADDRESS;
     I2C_Read(Device_addr, QMI8658_REVISION_ID, buf, 1);
-    printf("QMI8658 Device ID: %x\r\n", buf[0]); // Get chip id
+    //printf("QMI8658 Device ID: %x\r\n", buf[0]); // Get chip id
     setState(sensor_running);
 
     float sampleFreq = 20; // 1Hz ODR 60Hz 2%, Loop is 20Hz
@@ -196,7 +201,7 @@ void QMI8658_Init(void)
     }
     else
     {
-        printf("QMI8658 Restore setup from NVM:\n");
+        //printf("QMI8658 Restore setup from NVM:\n");
         uint8_t nvm_acc_scale = acc_scale;
         uint8_t nvm_acc_odr = acc_odr;
         uint8_t nvm_acc_lpf = acc_lpf;
@@ -214,6 +219,7 @@ void QMI8658_Init(void)
         uint8_t intBuffer = 99;
         nvs_get_u8(my_handle, "filterAttitude", &intBuffer);
 
+        /*
         printf("filterAttitude: %d\n", intBuffer);
         printf("nvm_acc_scale: %d\n", nvm_acc_scale);
         printf("nvm_acc_odr: %d\n", nvm_acc_odr);
@@ -221,7 +227,7 @@ void QMI8658_Init(void)
         printf("nvm_gyro_scale: %d\n", nvm_gyro_scale);
         printf("nvm_gyro_odr: %d\n", nvm_gyro_odr);
         printf("nvm_gyro_lpf: %d\n", nvm_gyro_lpf);
-
+        */
         acc_scale = nvm_acc_scale;
         acc_odr = nvm_acc_odr;
         acc_lpf = nvm_acc_lpf;
@@ -586,21 +592,6 @@ int16_t getPitchFromAccel(float ax, float ay, float az)
     return pitchReference;
 }
 
-// Complementary filter for roll and pitch estimation
-void updateAttitude(float ax, float ay, float az, float gx, float gy, float *roll, float *pitch)
-{
-    // Convert gyroscope readings from degrees per second to angle change
-    float gyroRoll = *roll + gx * DT;
-    float gyroPitch = *pitch + gy * DT;
-
-    // Compute accelerometer roll and pitch
-    float accelRoll = getRollFromAccel(ax, ay, az);
-    float accelPitch = getPitchFromAccel(ax, ay, az);
-
-    // Apply complementary filter
-    *roll = AttitudeBalanceAlpha * gyroRoll + (1.0 - AttitudeBalanceAlpha) * accelRoll;
-    *pitch = AttitudeBalanceAlpha * gyroPitch + (1.0 - AttitudeBalanceAlpha) * accelPitch;
-}
 
 // Guru Meditation Error: Core  0 panic'ed (IntegerDivideByZero). Exception was unhandled.
 void getGyroscope(void)
@@ -642,6 +633,31 @@ void getGFactor(void)
     lv_sqrt_res_t res;
     lv_sqrt(AccelFiltered.x * AccelFiltered.x * 100.0 + AccelFiltered.y * AccelFiltered.y * 100.0 + AccelFiltered.z * AccelFiltered.z * 100.0, &res, 0x8000);
     GFactor = res.i / 10.0;
+    /*
+        Load Factor Maneuver
+        15° -> 1.3G
+        45° -> 1.4G
+        50° -> 1.5G
+        55° -> 1.6G
+        57° -> 1.65G
+        58° -> 1.7G
+        60° -> 2G
+    */
+#define AttitudeBalanceAlphaAerobaticsGFactorThreshold 2.0
+#define AttitudeBalanceAlphaAerobaticsGFactorLowPassFilter 6
+    // Low pass filter to avoid turbolence and be sure you are under continuous Gs before switch to aerobatic mode, then switch to a more responsive filter to be more reactive to G changes
+    static float GFactorLowPassFilter = 0;
+
+    GFactorLowPassFilter = (GFactorLowPassFilter * (AttitudeBalanceAlphaAerobaticsGFactorLowPassFilter - 1) + GFactor) / AttitudeBalanceAlphaAerobaticsGFactorLowPassFilter;
+
+    if(GFactorLowPassFilter > AttitudeBalanceAlphaAerobaticsGFactorThreshold)
+    {
+        AttitudeBalanceAlphaAerobatics = 1.0;
+    } else {
+        float attitudeFactor = (1.0-AttitudeBalanceAlpha) / AttitudeBalanceAlphaAerobaticsGFactorThreshold;
+        AttitudeBalanceAlphaAerobatics = AttitudeBalanceAlpha+GFactorLowPassFilter*attitudeFactor;
+    }
+
     if (AccelFiltered.x < 0)
     {
         GFactor = GFactor * -1.0;
@@ -752,21 +768,12 @@ void PanelAlignmentMatrixApply(IMUdata aS, IMUdata *aB_out, IMUdata ref)
 
 void getAttitude(void)
 {
-    /*
     static int64_t last = 0;
     int64_t now = esp_timer_get_time();
     int32_t elapsed = now - last;
     last = now;
-    invSampleFreq = 1000000.0/elapsed;
-    //printf("Hz: %f\n",invSampleFreq);
-    */
+    invSampleFreq = elapsed/1000000.0;
 
-    if (EnableAttitudeMadgwick == 0)
-    {
-        updateAttitude(AccelFiltered.z, AccelFiltered.y, -AccelFiltered.x, GyroFiltered.z + GyroBias.z, -(GyroFiltered.y + GyroBias.y), &AttitudeRoll, &AttitudePitch);
-        AttitudeYawDegreePerSecond = -(GyroFiltered.x + GyroBias.x);
-    }
-    else
     {
         // AY <= -Z
         // AX <= Y
@@ -815,7 +822,7 @@ void getAttitude(void)
         int64_t now = esp_timer_get_time();
         int64_t GPSIsReliable = now - GPSLastSpeedKmhReceivedTick;
 
-        if (GPSIsReliable < 10000000 && false)
+        if (GPSIsReliable < 10000000) // If GPS data is recent (within 10 seconds)
         {
             // float yaw_madgwick = atan2f(2.0f * (q1 * q2 + q0 * q3),
             //                             q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3);
@@ -869,11 +876,9 @@ void getAttitude(void)
         // Madgwick_GetEuler(&AttitudeRoll, &AttitudePitch, &AttitudeYaw);
 
         static float prev_yaw = 0;
-        float dt = 0.05f; // 1/20Hz
-        float yaw_rate_dps = unwrapAngle(prev_yaw, AttitudeYaw) / dt;
+        float yaw_rate_dps = unwrapAngle(prev_yaw, AttitudeYaw) / invSampleFreq;
         prev_yaw = AttitudeYaw;
-        float alpha = 0.01f; // Smoothing factor (0.0–1.0)
-        AttitudeYawDegreePerSecond = alpha * yaw_rate_dps + (1.0f - alpha) * AttitudeYawDegreePerSecond;
+        AttitudeYawDegreePerSecond = YAW_RATE_SMOOTHING_ALPHA * yaw_rate_dps + (1.0f - YAW_RATE_SMOOTHING_ALPHA) * AttitudeYawDegreePerSecond;
         static float LastAttitudeRoll = 0;
         static float LastAttitudePitch = 0;
         AttitudeRoll = (LastAttitudeRoll * FilterMoltiplierOutput + (AttitudeRoll)) / (FilterMoltiplierOutput + 1);

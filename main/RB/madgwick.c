@@ -1,6 +1,6 @@
 #include "madgwick.h"
 #include <math.h>
-extern float AttitudeBalanceAlpha;
+extern float AttitudeBalanceAlphaAerobatics;
 float q0 = 1.0f, q1 = 0.0f, q2 = 0.0f, q3 = 0.0f;  // Quaternion
 //static float beta = 0.1f;        // 2 * proportional gain
 float invSampleFreq = 0.01f;  // 1 / sample frequency (100 Hz default)
@@ -59,7 +59,7 @@ void Madgwick_UpdateIMU(float gx, float gy, float gz, float ax, float ay, float 
     s3 *= norm;
 
     // Apply feedback
-    float beta = 1.0 - AttitudeBalanceAlpha;
+    float beta = 1.0 - AttitudeBalanceAlphaAerobatics;
     qDot1 -= beta * s0;
     qDot2 -= beta * s1;
     qDot3 -= beta * s2;

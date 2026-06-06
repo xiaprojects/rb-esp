@@ -127,7 +127,7 @@ typedef enum {
     sensor_locking  
 } sensor_state_t;
 
-
+extern float AttitudeBalanceAlphaAerobatics;
 
 void QMI8658_Init(void);
 void QMI8658_Loop(void);
