@@ -1158,16 +1158,7 @@ void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
       }
     }
   }
-  else
-  {
-    // 1.1.16 Enable the INOP in case the GPS is disconnected and does not trigger any data in 5 seconds
-    int64_t now = esp_timer_get_time();
-    int64_t isGPSTimeout = (now - GPSLastSpeedKmhReceivedTick);
-    if (isGPSTimeout > 50000000)
-    {
-      Operative_GPS = false;
-    }
-  }
+
 #ifdef RB_ENABLE_GPS_DIAG
   if (GPSDiag_NMEADebugSummary != NULL)
   {
@@ -2256,6 +2247,13 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
     {
       uint8_t isAttitudeDoNotNeedGPS = 1;
 #ifdef RB_ENABLE_GPS
+      // 1.1.16 Enable the INOP in case the GPS is disconnected and does not trigger any data in 5 seconds
+      int64_t now = esp_timer_get_time();
+      int64_t isGPSTimeout = (now - GPSLastSpeedKmhReceivedTick);
+      if (isGPSTimeout > 5000000)
+      {
+        Operative_GPS = false;
+      }
       isAttitudeDoNotNeedGPS = Operative_GPS;
 #endif
 
