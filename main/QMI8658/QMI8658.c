@@ -822,7 +822,7 @@ void getAttitude(void)
         int64_t now = esp_timer_get_time();
         int64_t GPSIsReliable = now - GPSLastSpeedKmhReceivedTick;
 
-        if (GPSIsReliable < 10000000) // If GPS data is recent (within 10 seconds)
+        if (GPSIsReliable < 10000000 && false) // If GPS data is recent (within 10 seconds)
         {
             // float yaw_madgwick = atan2f(2.0f * (q1 * q2 + q0 * q3),
             //                             q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3);

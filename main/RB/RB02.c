@@ -1552,7 +1552,7 @@ void nvsStoreGMeter()
   else
   {
     // Read
-    printf("G-Meter store: %f %f\n",GFactorMax,GFactorMin);
+    //printf("G-Meter store: %f %f\n",GFactorMax,GFactorMin);
     err = nvs_set_i8(my_handle, "gmeter_max", 10.0 * GFactorMax);
     err = nvs_set_i8(my_handle, "gmeter_min", 10.0 * GFactorMin);
 

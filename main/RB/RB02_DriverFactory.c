@@ -56,6 +56,7 @@ float FilterMoltiplierOutput = 5.0;
 float FilterMoltiplierGyro = 10.0;
 uint32_t SDCard_Size = 0;
 float AttitudeBalanceAlpha = 1.0 / 250.0;
+float AttitudeBalanceAlphaAerobatics = 1.0 / 250.0;
 datetime_t datetime= {0};
 int16_t TouchPadLastX;
 int16_t TouchPadLastY;
