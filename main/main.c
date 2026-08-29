@@ -208,7 +208,7 @@ void app_main(void)
     }
     Driver_Init();
 
-#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)
+#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)||  defined(RB_ENABLE_EMS)
     setvbuf(stdin, NULL, _IONBF, 0);
     // Create USB Console input thread
     xTaskCreatePinnedToCore(
