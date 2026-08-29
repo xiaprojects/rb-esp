@@ -3,6 +3,9 @@ rem BuildMachine.bat - refactored: parameterized builds via :build subroutine
 
 rem Get version from git tags; fall back to date if git not available
 for /f "delims=" %%i in ('git describe --tags') do set VERSION=%%i
+if "%VERSION%"=="" (
+  for /f "tokens=1-4 delims=/ " %%a in ('date /t') do set VERSION=%%a-%%b-%%c
+)
 
 set "OUTDIR=build\RB-%VERSION%"
 if not exist "%OUTDIR%" md "%OUTDIR%"
