@@ -49,6 +49,12 @@ RB02_Status *singletonConfig()
     }
     return rb02Status;
 }
+#ifdef RB_ENABLE_USB_FLARM
+void RB02_Config_Set_OperativeFlarm(uint8_t operative)
+{
+    singletonConfig()->Operative_Flarm = operative;
+}
+#endif
 
 #ifdef RB02_ESP_BLUETOOTH
 

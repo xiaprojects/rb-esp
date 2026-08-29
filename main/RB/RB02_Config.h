@@ -179,6 +179,9 @@ typedef struct
     uint8_t Operative_Bluetooth;
     uint8_t settingsBluetoothGPS;
 #endif
+#ifdef RB_ENABLE_USB_FLARM
+    uint8_t Operative_Flarm;
+#endif
     uint8_t settingsAutoQNH;
     int32_t bmp280override;
     uint8_t bmp280Address;

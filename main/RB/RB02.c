@@ -1069,7 +1069,8 @@ void uart_fetch_data()
 #endif
 }
 #endif
-
+#endif
+#if defined(RB_ENABLE_GPS) ||  defined(RB_ENABLE_EMS)
 void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
 {
 #ifdef RB01_GPS_PROTOCOL_BLE
@@ -1113,6 +1114,7 @@ void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
             singletonConfig()->ui.SettingStatus4UARTIsFault=0;
             lv_label_set_text(singletonConfig()->ui.SettingStatus4UART, "DATA RECEIVED");
           }
+#if defined(RB_ENABLE_GPS)
           uint16_t parsedLength = nmea_RMC_mini_parser(data + x, rxBytes - x);
           if (parsedLength > 0 && parsedLength < rxBytes - x)
           {
@@ -1129,10 +1131,12 @@ void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
             lv_label_set_text(GPSDiag_NMEADebugRMC, (char *)(data + x));
           }
 #endif
+#endif
           // break; // Fast as possibile we go back and do not parse anymore
         }
         else
         {
+#if defined(RB_ENABLE_GPS)
           if (strncmp((char *)(data + x + 1), "GPGGA,", 5) == 0 || strncmp((char *)(data + x + 1), "GNGGA,", 5) == 0)
           {
             uint16_t parsedLength = nmea_GGA_mini_parser(data + x, rxBytes - x);
@@ -1154,6 +1158,7 @@ void NMEA_ParseBuffer(const uint8_t *data, const int rxBytes, uint8_t SourceId)
             }
 #endif
           }
+#endif
         }
       }
     }
@@ -2298,6 +2303,24 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
       }
     }
 #endif
+#ifdef RB_ENABLE_USB_FLARM
+    if (singletonConfig()->Operative_Flarm && OperativeWarningVisible == true)
+    {
+      lv_obj_add_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
+      OperativeWarningVisible = false;
+    }
+    else
+    {
+      if (singletonConfig()->Operative_Flarm == 0 && OperativeWarningVisible == false)
+      {
+        lv_obj_clear_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
+        OperativeWarningVisible = true;
+      }
+      else
+      {
+      }
+    }
+#endif
     break;
   case RB02_TAB_TRA:
     RB05_Traffic_Tick(&(singletonConfig()->trafficStatus));
@@ -2310,6 +2333,24 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
     else
     {
       if (singletonConfig()->Operative_Bluetooth == 0 && OperativeWarningVisible == false)
+      {
+        lv_obj_clear_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
+        OperativeWarningVisible = true;
+      }
+      else
+      {
+      }
+    }
+#endif
+#ifdef RB_ENABLE_USB_FLARM
+    if (singletonConfig()->Operative_Flarm && OperativeWarningVisible == true)
+    {
+      lv_obj_add_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
+      OperativeWarningVisible = false;
+    }
+    else
+    {
+      if (singletonConfig()->Operative_Flarm == 0 && OperativeWarningVisible == false)
       {
         lv_obj_clear_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
         OperativeWarningVisible = true;
