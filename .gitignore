@@ -1,0 +1,11 @@
+.claude
+# ESP-IDF build output (also holds the host test build in build/host-tests)
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Editor / tooling
+.vscode/
+.clangd
+.cache/
