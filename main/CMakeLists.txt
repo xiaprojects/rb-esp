@@ -53,7 +53,6 @@ idf_component_register(
                                      "./QMI8658"
                                      "./SD_Card"
                                      "./RB"
-                                     "./LVGL_UI"
                                      "./Bluetooth"
                                      "./Buzzer"
                                      "./BAT_Driver"
@@ -61,6 +60,5 @@ idf_component_register(
                                      "./BME680"
                                      "./sc16is750"
                                      "./MS4525DO"
-                                     "./esp_lcd_sh8601/include"
                                      "."
                         )
