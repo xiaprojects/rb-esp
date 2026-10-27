@@ -22,7 +22,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define CONFIG_ESP_LCD_TOUCH_MAX_POINTS 5
+#define CONFIG_ESP_LCD_TOUCH_MAX_POINTS 2
 /**
  * @brief Touch controller type
  *

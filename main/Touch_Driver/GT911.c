@@ -215,11 +215,12 @@ static void touch_gt911_read_cfg(esp_lcd_touch_handle_t tp)
     touch_gt911_i2c_read(tp, ESP_LCD_TOUCH_GT911_PRODUCT_ID_REG, (uint8_t *)&buf[0], 3);
     touch_gt911_i2c_read(tp, ESP_LCD_TOUCH_GT911_CONFIG_REG, (uint8_t *)&buf[3], 1);
 
-    printf("TouchPad_ID:0x%02x,0x%02x,0x%02x\r\n", buf[0], buf[1], buf[2]);
-    printf("TouchPad_Config_Version:%d\r\n", buf[3]);
+    // Avoid Printf garbage output in the console
+    // printf("TouchPad_ID:0x%02x,0x%02x,0x%02x\r\n", buf[0], buf[1], buf[2]);
+    // printf("TouchPad_Config_Version:%d\r\n", buf[3]);
 
     touch_gt911_i2c_read(tp, 0x804D, (uint8_t *)&buf[3], 1);
-    printf("TouchPad_INT:%d\r\n", (buf[3]&0x03));
+    // printf("TouchPad_INT:%d\r\n", (buf[3]&0x03));
 
 }
 

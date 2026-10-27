@@ -93,33 +93,33 @@ static esp_err_t read_data(esp_lcd_touch_handle_t tp)
     uint8_t close = 1;
 
     assert(tp != NULL);
+    // Waveshare official bugfix to the CST820 driver, the touch controller does not clear the touch data after reading, so we need to clear it manually.
+    // uint8_t write_buf = 0x01;
+    // i2c_master_write_to_device(0, DATA_START_REG, &write_buf, 1, 1000 / portTICK_PERIOD_MS);
 
-    uint8_t write_buf = 0x01;
-    i2c_master_write_to_device(0, DATA_START_REG, &write_buf, 1, 1000 / portTICK_PERIOD_MS);
-
-    touch_cst820_i2c_write(tp, 0xFE, &close, 1);
+    // touch_cst820_i2c_write(tp, 0xFE, &close, 1);
 
     err = i2c_read_bytes(tp, TOUCH_NUM, buf, 1);
     ESP_RETURN_ON_ERROR(err, TAG, "I2C read error!");
-    touch_cst820_i2c_write(tp, TOUCH_POSITION, &Over, 1);
+    // touch_cst820_i2c_write(tp, TOUCH_POSITION, &Over, 1);
 
     if ((buf[0] & 0x0F) == 0x00) {
-        touch_cst820_i2c_write(tp, TOUCH_NUM, &clear, 1);  
+        // touch_cst820_i2c_write(tp, TOUCH_NUM, &clear, 1);  
     } else {
         /* Count of touched points */
         touch_cnt = buf[0] & 0x0F;
         if (touch_cnt > 2 || touch_cnt == 0) {
-            touch_cst820_i2c_write(tp, TOUCH_NUM, &clear, 1);
+            // touch_cst820_i2c_write(tp, TOUCH_NUM, &clear, 1);
             return ESP_OK;
         }
 
         /* Read all points */
         err = i2c_read_bytes(tp, TOUCH_POSITION, &buf[0], touch_cnt * 6);
         ESP_RETURN_ON_ERROR(err, TAG, "I2C read error!");
-        touch_cst820_i2c_write(tp, TOUCH_POSITION, &Over, 1);
+        // touch_cst820_i2c_write(tp, TOUCH_POSITION, &Over, 1);
 
         /* Clear all */
-        err = touch_cst820_i2c_write(tp, TOUCH_NUM, &clear, 1);
+        // err = touch_cst820_i2c_write(tp, TOUCH_NUM, &clear, 1);
 
         taskENTER_CRITICAL(&tp->data.lock);
 
@@ -191,7 +191,7 @@ static esp_err_t read_id(esp_lcd_touch_handle_t tp)
     uint8_t id=0x10;
     uint8_t Over = 0x01;
 
-    touch_cst820_i2c_write(tp, DATA_START_REG, &Over, 1);
+    // touch_cst820_i2c_write(tp, DATA_START_REG, &Over, 1);
 
     ESP_RETURN_ON_ERROR(i2c_read_bytes(tp, CHIP_ID_REG, &id, 1), TAG, "I2C read failed");
     ESP_LOGI(TAG, "IC id: %d", id);
