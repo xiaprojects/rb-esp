@@ -3,4 +3,4 @@
 #define RB_PRODUCT_LINE 4
 #define RB_ENABLE_EMS 1
 #define RB_ENABLE_CONSOLE 1
-//#define RB_ENABLE_UART 1
+#define RB_ENABLE_USB_NMEA 1
