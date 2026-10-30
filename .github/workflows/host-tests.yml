@@ -1,0 +1,107 @@
+name: Host tests
+
+# Native unit/integration tests for firmware logic (test/host). No ESP-IDF needed:
+# ESP-IDF, FreeRTOS and LVGL are replaced by the fakes in test/host/stubs.
+# This does NOT build the firmware - firmware.yml does that.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'main/**'
+      - 'test/host/**'
+      - '.github/workflows/host-tests.yml'
+  pull_request:
+    paths:
+      - 'main/**'
+      - 'test/host/**'
+      - '.github/workflows/host-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  ctest:
+    name: ctest${{ matrix.sanitize && ' (asan+ubsan)' || '' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitize: false
+          - sanitize: true
+    steps:
+      - uses: actions/checkout@v4
+
+      # The suites inherit their feature flags from main/RB/BuildMachine.h, which
+      # is a generated file (RB02_Defines.h includes it by quoted path, so the
+      # host build cannot shadow it). Whatever happens to be committed there is
+      # not a fixed contract - the version in git has RB_ENABLE_TRK on and no
+      # Bluetooth, which compiles the traffic module out entirely - so pin a
+      # known config to keep CI deterministic and the full suite enabled.
+      #
+      # Overwriting it is safe HERE ONLY because the checkout is throwaway.
+      # Never do this in a working tree: back the file up first and restore it
+      # from that copy, as BuildMachine-2.0.sh does.
+      - name: Pin BuildMachine.h for the host suite
+        run: |
+          cat > main/RB/BuildMachine.h <<'EOF'
+          #define RB_02_DISPLAY_TOUCH 1
+          #define RB_02_DISPLAY_SIZE RB_02_DISPLAY_28
+          #define RB_LICENSE_TYPE RB_LICENSE_TYPE_COMMUNITY
+          #define RB_PRODUCT_LINE 5
+          #define RB02_ESP_BLUETOOTH 1
+          #define RB_ENABLE_CONSOLE 1
+          #define RB_VERSION "ci"
+          EOF
+
+      - name: Configure
+        run: cmake -S test/host -B build/host-tests -DRB_SANITIZE=${{ matrix.sanitize && 'ON' || 'OFF' }}
+
+      - name: Build
+        run: cmake --build build/host-tests --parallel
+
+      # A suite CMake decided to skip would otherwise pass silently.
+      - name: Check every suite was enabled
+        run: |
+          missing=0
+          for t in test_madgwick test_guihelpers test_ems_parser test_ec11 test_traffic test_gps test_slave; do
+            if [ ! -x "build/host-tests/$t" ]; then
+              echo "::error title=Suite not built::$t"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build/host-tests --output-on-failure
+
+      # UBSan reports do not fail a process by default, so a clean ctest is not
+      # proof on its own. Fail the job if any suite prints a sanitizer report.
+      - name: Fail on sanitizer reports
+        if: matrix.sanitize
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: |
+          status=0
+          for t in build/host-tests/test_*; do
+            [ -x "$t" ] || continue
+            out=$("$t" 2>&1) || status=1
+            if printf '%s' "$out" | grep -qE 'runtime error|ERROR: AddressSanitizer'; then
+              echo "::error title=Sanitizer report::$(basename "$t")"
+              printf '%s\n' "$out" | grep -E 'runtime error|ERROR: AddressSanitizer' | sort -u
+              status=1
+            fi
+          done
+          exit $status
+
+      # Visible, not enforced: ignored tests are deliberate markers for known
+      # defects, so the count should only ever go down.
+      - name: Report ignored tests
+        if: ${{ !matrix.sanitize }}
+        run: |
+          for t in build/host-tests/test_*; do
+            [ -x "$t" ] || continue
+            "$t" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep 'IGNORE' || true
+          done

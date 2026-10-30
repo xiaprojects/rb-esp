@@ -1,0 +1,171 @@
+name: Firmware
+
+# Compiles every firmware variant BuildMachine-2.0.sh ships, in the ESP-IDF
+# container matching dependencies.lock. A compile check, not a release
+# pipeline: releases are still built locally.
+#
+# Images are kept as artifacts only on manual runs (Actions > Firmware > Run
+# workflow), because artifacts on a public repository can be downloaded by
+# anyone. They are not distributable: commercial variants carry the public
+# licence placeholder from RB_LicenseKeygen.c, and nothing here goes through
+# the release testing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'main/**'
+      - 'CMakeLists.txt'
+      - 'sdkconfig.defaults*'
+      - 'partitions.csv'
+      - 'dependencies.lock'
+      - 'BuildMachine-2.0.sh'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'main/**'
+      - 'CMakeLists.txt'
+      - 'sdkconfig.defaults*'
+      - 'partitions.csv'
+      - 'dependencies.lock'
+      - 'BuildMachine-2.0.sh'
+      - '.github/workflows/firmware.yml'
+  workflow_dispatch:
+    inputs:
+      variants:
+        description: 'BuildMachine-2.0.sh patterns, e.g. "RB-09-*" or "*EMS*" (empty: all)'
+        default: ''
+      pixel_clocks:
+        description: 'LCD pixel clocks in MHz (releases use "18 19 20")'
+        default: '20'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  variants:
+    name: List variants
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.list.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # BuildMachine-2.0.sh holds the release list. Asking it, rather than
+      # repeating the list here, builds a new variant without editing CI, and
+      # a missing template fails here, before any build starts. One job per
+      # product line and touch/non-touch: DIAG-TOUCH, RB-02-NONTOUCH, ...
+      - name: List
+        id: list
+        env:
+          VARIANTS: ${{ inputs.variants }}
+        run: |
+          set -f   # the patterns are for the script, not for the shell
+          # shellcheck disable=SC2086 # one argument per pattern
+          LIST_ONLY=1 ./BuildMachine-2.0.sh $VARIANTS | sort -u > variants.txt
+          cat variants.txt
+          matrix=$(awk -F- '{ print ($1 == "RB" ? $1 "-" $2 "-" $3 : $1 "-" $2), $0 }' variants.txt |
+            jq -Rnc '[inputs | split(" ") | {group: .[0], variant: .[1]}]
+                     | group_by(.group)
+                     | {include: map({group: .[0].group, variants: (map(.variant) | join(" "))})}')
+          if [ "$matrix" = '{"include":[]}' ]; then
+            echo "::error title=No variants::nothing matches '$VARIANTS'"
+            exit 1
+          fi
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: ${{ matrix.group }}
+    needs: variants
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.5
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.variants.outputs.matrix) }}
+    env:
+      IDF_CCACHE_ENABLE: 1
+      CCACHE_MAXSIZE: 1G
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags: git describe names the images
+
+      # The container runs as root on a workspace owned by the runner user.
+      # Without this git refuses the repository, and BuildMachine-2.0.sh
+      # quietly falls back to the date for RB_VERSION.
+      - name: Trust the workspace
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git describe --tags || echo "::warning::no tag reachable; RB_VERSION falls back to the date"
+
+      # RB02.h ends with an #error so that casual clones use the official
+      # binaries; the maintainer comments it out to build. Do the same here.
+      # Safe ONLY because this checkout is throwaway.
+      - name: Lift the compile guard
+        run: sed -i '/#error You shall not compile yourself/d' main/RB/RB02.h
+
+      - name: Restore compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.group }}-${{ github.sha }}
+          restore-keys: ccache-${{ matrix.group }}-
+
+      # sdkconfig is not tracked: it is generated here from sdkconfig.defaults*
+      # and main/Kconfig.projbuild. Fail if a setting the firmware relies on did
+      # not come through, rather than build images that silently lack
+      # Bluetooth or the LCD anti-tearing sync.
+      - name: Configure
+        run: |
+          . "$IDF_PATH/export.sh" > /dev/null
+          idf.py set-target esp32s3
+          missing=0
+          for opt in CONFIG_BT_ENABLED=y \
+                     CONFIG_BT_BLE_42_FEATURES_SUPPORTED=y \
+                     CONFIG_EXAMPLE_AVOID_TEAR_EFFECT_WITH_SEM=y \
+                     CONFIG_SPIRAM_MODE_OCT=y \
+                     'CONFIG_ESPTOOLPY_FLASHSIZE="16MB"' \
+                     'CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"'; do
+            if ! grep -qxF "$opt" sdkconfig; then
+              echo "::error title=sdkconfig::$opt is not set"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Build
+        env:
+          VARIANTS: ${{ matrix.variants }}
+          PIXEL_CLOCKS: ${{ inputs.pixel_clocks || '20' }}
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache"
+          # shellcheck disable=SC2086 # one argument per variant
+          ./BuildMachine-2.0.sh $VARIANTS
+          cp sdkconfig build/RB-*/
+
+      # PRs read main's cache but never write one, so the repository's 10 GB
+      # holds one set of group caches rather than one per branch.
+      - name: Save compiler cache
+        if: ${{ !cancelled() && github.event_name != 'pull_request' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.group }}-${{ github.sha }}
+
+      - name: Upload images
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.group }}
+          path: build/RB-*/
+          if-no-files-found: error
+          retention-days: 7
