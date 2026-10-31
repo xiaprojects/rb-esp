@@ -3,7 +3,7 @@
 Open-source aviation instrument firmware for ESP32-S3 displays: attitude, altimeter,
 variometer, GPS, engine monitoring and FLARM/ADS-B traffic. ESP-IDF (>= 4.4) + LVGL 8.4,
 pure C. Public repo with a worldwide builder community; see `README.md` for the product
-lines (RB-01..RB-08) and the wiki links.
+lines (RB-01..RB-09) and the wiki links.
 
 ---
 
@@ -95,8 +95,15 @@ ASAN_OPTIONS=detect_leaks=0 ./build/host-asan/test_traffic
 simulator, the dump1090 → `$PFLAA` converter, and how to add a suite. Read it before
 extending the tests; do not re-derive it.
 
-Current state: 5 suites, ~140 tests, 1 `TEST_IGNORE` marker left (in `test_madgwick`).
-Keep it that way — a new failure or a new ignore should be deliberate and mentioned.
+Current state: 7 suites, ~235 tests, 8 `TEST_IGNORE` markers (1 in `test_madgwick`, 4 GPS
+defects in `test_gps`, 1 each in `test_ems_parser`, `test_slave` and `test_traffic` from the RB
+Simulator replays). Keep it that way — a new failure or a new ignore should be deliberate and
+mentioned.
+
+**`test_gps` compiles a slice of `RB02.c`**, cut out at configure time from the
+`#ifdef RB_ENABLE_GPS` before `nmea_GGA_UpdatedValueFor()` to the `#endif` after
+`NMEA_ParseBuffer()`. Editing `RB02.c` re-runs the cut. If you restructure that region,
+configure fails naming the marker it lost: update the markers in `test/host/CMakeLists.txt`.
 
 **The suites inherit their feature flags from `main/RB/BuildMachine.h`.** `RB02_Defines.h`
 includes it by quoted path, so the host build cannot shadow it, and whichever config happens
@@ -109,7 +116,7 @@ on it. `test/host/CMakeLists.txt` detects this and prints why, rather than faili
 -- Skipping test_traffic: ... the traffic module is compiled out.
 ```
 
-If you see 4 suites instead of 5, that is the reason. CI pins a known traffic-capable config
+If you see 6 suites instead of 7, that is the reason. CI pins a known traffic-capable config
 (safe there — the checkout is throwaway) and fails if any suite was skipped.
 
 ---
@@ -170,6 +177,7 @@ reference, and do not copy from it.
 | `RB04_EMS.c`, `RB04_NMEA_Parser.c` | engine monitoring, `$RBEMS`/`$RBCYL` parser |
 | `RB05_FlarmParser.c/.h` | `$PFLAA`/`$PFLAU` parser, traffic store, stream reassembly |
 | `RB05_Traffic.c`, `RB05_Radar.c` | traffic list and radar screens |
+| `RB09_Slave.c/.h` | RB-09 remote display: `$RBATT`/`$RBAIR` from USB in place of the local IMU and barometer; `RB09_Slave_FormatAir()`, the master's `$RBAIR`, is in every build |
 | `madgwick.c/.h` | IMU attitude filter |
 | `RB_License.c` | licence tier gating |
 

@@ -8,6 +8,7 @@ The RB is the Open-source Aviation instruments suite, the models are divided by 
 - RB-06 -> Display with Android 6.25" 7" 8" 10" 10.2"
 - RB-07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
 - RB-08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+- RB-09 -> Remote display SLAVE: attitude and air data from RB-Sim (PC) or RB-01 over USB (this repo)
 - RB-Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
 
 More about in https://www.rbavionics.com and Discord community

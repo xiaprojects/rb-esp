@@ -11,15 +11,23 @@
 # Environment:
 #   PIXEL_CLOCKS  pixel clocks in MHz to build for (default "18 19 20")
 #   ESPTOOL       esptool command (default: esptool, else esptool.py)
+#   LIST_ONLY     if set, print the <prefix><template> of each variant that
+#                 would be built, one per line on stdout, and build nothing;
+#                 needs no ESP-IDF (CI uses it to plan its jobs)
 #
 # Run it from a shell where ESP-IDF is activated (export.sh, or EIM's
 # activate_idf_*.sh); with only IDF_PATH set, $IDF_PATH/export.sh is sourced
 # here. Images that already exist are skipped;
 # delete them to force a rebuild. main/RB/BuildMachine.h is restored on exit.
+# A missing template is an error, not a skip.
 
 cd "$(dirname "$0")" || exit 1
 
-if ! command -v idf.py >/dev/null 2>&1; then
+LIST_ONLY=${LIST_ONLY:-}
+if [ -n "$LIST_ONLY" ]; then
+  # stdout carries only the variant names; all logging goes to stderr
+  exec 3>&1 1>&2
+elif ! command -v idf.py >/dev/null 2>&1; then
   if [ -x "${IDF_PYTHON_ENV_PATH:-}/bin/python" ] && [ -f "${IDF_PATH:-}/tools/idf.py" ]; then
     # EIM's activate_idf_*.sh defines idf.py as a shell function, which
     # scripts do not inherit
@@ -28,7 +36,7 @@ if ! command -v idf.py >/dev/null 2>&1; then
     . "$IDF_PATH/export.sh" >/dev/null || exit 1
   fi
 fi
-if ! command -v idf.py >/dev/null 2>&1; then
+if [ -z "$LIST_ONLY" ] && ! command -v idf.py >/dev/null 2>&1; then
   echo "[ERROR] idf.py not found; activate ESP-IDF (export.sh or activate_idf_*.sh) first" >&2
   exit 1
 fi
@@ -49,9 +57,11 @@ VERSION=$(git describe --tags 2>/dev/null)
 # Every build overwrites the header; put the developer's copy back afterwards.
 # Plain cp (not -p) so the restored file is newer than the last build's objects.
 HEADER=main/RB/BuildMachine.h
-HEADER_BACKUP=$(mktemp) || exit 1
-cp "$HEADER" "$HEADER_BACKUP" || exit 1
-trap 'cp "$HEADER_BACKUP" "$HEADER"; rm -f "$HEADER_BACKUP"' EXIT
+if [ -z "$LIST_ONLY" ]; then
+  HEADER_BACKUP=$(mktemp) || exit 1
+  cp "$HEADER" "$HEADER_BACKUP" || exit 1
+  trap 'cp "$HEADER_BACKUP" "$HEADER"; rm -f "$HEADER_BACKUP"' EXIT
+fi
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
@@ -81,7 +91,13 @@ build() {
 
   SOURCE="$SOURCE_PREFIX$TEMPLATE.h"
   if [ ! -f "$SOURCE" ]; then
-    echo "[WARN] Template not found: \"$SOURCE\""
+    echo "[ERROR] Template not found: \"$SOURCE\""
+    FAILED+=("$OUTFILE")
+    return 1
+  fi
+
+  if [ -n "$LIST_ONLY" ]; then
+    echo "$OUT_PREFIX$TEMPLATE" >&3
     return 0
   fi
 
@@ -122,9 +138,11 @@ build() {
 }
 
 # idf.py app only rebuilds the application; the merge also needs these
-if [ ! -f build/bootloader/bootloader.bin ] || [ ! -f build/partition_table/partition-table.bin ]; then
-  echo "[INFO] Building bootloader and partition table"
-  idf.py bootloader partition-table || exit 1
+if [ -z "$LIST_ONLY" ]; then
+  if [ ! -f build/bootloader/bootloader.bin ] || [ ! -f build/partition_table/partition-table.bin ]; then
+    echo "[INFO] Building bootloader and partition table"
+    idf.py bootloader partition-table || exit 1
+  fi
 fi
 
 T=main/RB/BuildMachine-Template-
@@ -175,6 +193,9 @@ for P in $PIXEL_CLOCKS; do
 
   build TOUCH-30hz-USB-2.1 "${T}RB-02-" "RB-02-" app "$P"
   build TOUCH-30hz-USB-2.8 "${T}RB-02-" "RB-02-" app "$P"
+
+  build TOUCH-30hz-USB-2.1 "${T}RB-09-" "RB-09-" app "$P"
+  build TOUCH-30hz-USB-2.8 "${T}RB-09-" "RB-09-" app "$P"
 done
 
 if [ ${#FAILED[@]} -gt 0 ]; then

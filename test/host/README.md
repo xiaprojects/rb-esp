@@ -27,13 +27,17 @@ the same dialect ESP-IDF uses).
 | `test_madgwick`   | `RB/madgwick.c`          | IMU attitude filter: convergence, gyro integration, invariants |
 | `test_guihelpers` | `RB/RB02_GUIHelpers.c`   | NMEA coordinate/checksum helpers, QNH suggestion, model string |
 | `test_ems_parser` | `RB/RB04_NMEA_Parser.c`  | `$RBEMS` / `$RBCYL` engine-monitor sentence parser |
+| `test_slave`      | `RB/RB09_Slave.c`        | RB-09 remote display: `$RBATT` / `$RBAIR` parser, the loop that feeds the instruments and raises the INOP when the link goes stale, and the RB-02 `$RBAIR` sender round-tripped through both |
 | `test_ec11`       | `RB/RB02_NavCore.c`      | EC11 rotary encoder state machine and EC11→touch mapping |
 | `test_traffic`    | `RB/RB05_FlarmParser.c`, `RB/RB05_Traffic.c`, `RB/RB05_Radar.c` | FLARM / ADS-B traffic: sentence → store → traffic list and radar screens |
+| `test_gps`        | `RB/RB02.c` (GPS section only), `RB/RB02_GUIHelpers.c` | `$GPRMC` / `$GPGGA` → `NMEA_DATA`, auto-QNH, attitude compensation, replayed receiver session |
 
 Tests named `test_known_issue_*` document firmware defects found while writing
 the suite. They `TEST_IGNORE` themselves while the defect is present and become
 ordinary assertions as soon as it is fixed, so they never block CI but are
-visible in every run. One remains, in `test_madgwick`.
+visible in every run. Eight remain: one in `test_madgwick`, four in `test_gps`
+(see [GPS input](#gps-input)), and one each in `test_ems_parser`, `test_slave`
+and `test_traffic` (see [RB Simulator recordings](#rb-simulator-recordings)).
 
 `test_traffic`'s **Regressions** section holds the assertions that used to be
 `test_known_issue_*` markers and are now live. The comment on each records the
@@ -109,6 +113,120 @@ Ownship defaults to the position used by the fixtures; override with
 `--lat/--lon/--alt`. The script is also a working specification for the
 firmware-side adapter, if ADS-B input is ever wanted on the device.
 
+## GPS input
+
+`test_gps` covers the GPS path in `RB02.c`: the `$GPRMC` / `$GPGGA` field
+scanners, `NMEA_ParseBuffer()` (GP/GN talkers, the NMEA passthrough, the
+"DATA RECEIVED" status, the Bluetooth-GPS gate), auto-QNH, and the
+accelerations handed to the attitude filter.
+
+`RB02.c` is the application core and does not compile on the host as a whole.
+CMake cuts the GPS section out of it at configure time, from the
+`#ifdef RB_ENABLE_GPS` before `nmea_GGA_UpdatedValueFor()` to the `#endif`
+after `NMEA_ParseBuffer()`, into `gen/rb02_gps_slice.inc` in the build tree.
+The test `#include`s it after defining the globals the rest of `RB02.c`
+provides, and a `#line` directive keeps errors and sanitizer reports pointing
+at `RB02.c`. Editing `RB02.c` re-runs the cut; configure fails with a message
+if the markers move. The suite forces `RB_ENABLE_GPS` and builds on every
+`BuildMachine-Template-*.h`.
+
+`fixtures/gps_session.nmea` is a synthetic 45 s u-blox M8 session at 1 Hz in
+the receiver's default message set and order, at San Fernando (SADF), Buenos
+Aires: south and west, so a lost hemisphere letter shows up as a sign flip.
+Ground speed rises every second, which lets the replay tell which fixes
+arrived whole. Expected values are read from the fixture text with an
+independent parser rather than hard-coded. It is replayed as:
+
+* USB lines, as `RB_Usb.c` delivers them;
+* UART reads that each carry one whole second of output;
+* UART reads of every size from 80 to 256 bytes. That is what
+  `uart_fetch_data()` really gets: whatever arrived since the last 100 ms
+  tick, with nothing aligning reads to sentences, on both the UART driver and
+  the NavCore stream-buffer paths.
+
+`host_stub_set_time_autoadvance_us()` lets the fake clock move while the
+parser runs, so two sentences in one read are parsed microseconds apart, as
+on the device.
+
+Defects pinned there:
+
+| `test_known_issue_*` | Defect | Fix |
+|---|---|---|
+| `rmc_time_assumes_two_decimals` | the time field is split as `hhmmss.ss`; `hhmmss.sss` (MediaTek) and `hhmmss` give a wrong UTC clock | divide by 10^`decimalCounter` first |
+| `back_to_back_fixes_saturate_compensation` | `GPSDT` is receive time, so two fixes in one read put ±1.5 g / ±2 g into the attitude filter | take DT from the RMC time field |
+| `split_rmc_flips_the_hemisphere` | a read boundary on the `S`/`W` field leaves the position in the other hemisphere until the next fix | reassemble lines before parsing, as `RB05_FlarmParser_FeedStream()` does |
+| `uart_reads_split_across_sentences_drop_fixes` | same cause: about a third of fixes lose speed and track across 80–256 B reads | same |
+
+Each was checked against a prototype fix applied to a copy of the slice: it
+becomes a passing assertion and the rest of the suite still passes.
+
+## RB Simulator recordings
+
+The [RB Simulator](https://github.com/xiaprojects/rbsimulator) drives RB devices
+over USB serial from a flight simulator, or from its own synthetic flight.
+`fixtures/rbsim/` holds what its serial outputs write for three device
+profiles, so the parsers are tested against the sentences the simulator really
+sends:
+
+| Fixture | Profile | Sentences | Replayed by |
+|---|---|---|---|
+| `rbsim/rb04.nmea` | `rb04` | `$RBEMS` 5 Hz, `$RBCYL` 0.5 Hz, in RB-01's field order | `test_ems_parser` |
+| `rbsim/rb05.nmea` | `rb05` | `$GPRMC`, the `$PFLAA` lines and `$PFLAU`, 1 Hz | `test_traffic` |
+| `rbsim/rb09.nmea` | `rb09` | `$RBATT` 20 Hz, `$RBAIR` 10 Hz, `$GPRMC` + `$GPGGA` 5 Hz | `test_slave`, `test_gps` |
+
+The synthetic flight is a steady banked circle with no wind, with one traffic
+target circling 3 km out. Lines reach the parsers as `RB_Usb.c` delivers them:
+one per call, CR/LF stripped, to every parser the product's build enables.
+`sim/fixture_lines.{h,c}` reads a fixture that way and splits fields
+independently of the firmware. Expectations come from the fixture text, and
+from physics: in a coordinated level turn the turn rate is g tan(bank) / v and
+the GPS sees a lateral g tan(bank), with the bank from the recorded `$RBATT`.
+
+The replays check that:
+
+* RB-04: every line parses, and the fields the EMS screen draws equal the
+  sentence's.
+* RB-05: line, bulk and BLE framing give the same single target, which is on
+  the list and on the radar at its position and track, and gone 60 s after the
+  simulator stops.
+* RB-09: every `$RBATT` and `$RBAIR` is used, every instrument shows what the
+  sentence carries with no INOP while the stream runs, the turn needle turns
+  the way the aircraft banks at the coordinated rate, and the INOPs come up
+  1 s and 3 s after the stream stops.
+* RB-09 GPS: every fix arrives, the interleaved `$RBATT` / `$RBAIR` leave the
+  GPS alone, and the lateral acceleration handed to the attitude filter at
+  5 Hz is g tan(bank).
+
+The `rb09` recording has no receive times. Each `$RBATT` moves the clock 50 ms,
+and `RB09_Slave_Loop()` runs after it, as `Driver_Loop()` does at its default
+20 Hz. The GPS replay sets the clock from each `$GPRMC`'s own time.
+
+To re-record, for example after the simulator's sentences change:
+
+```sh
+PATH=$HOME/.dotnet:$PATH tools/record_rbsim.sh [path/to/rbsimulator]
+```
+
+It needs the .NET SDK and an rbsimulator checkout (by default, next to
+rb-esp), and takes 70 s because the simulator paces its output in real time.
+Every recording has new timestamps, which no test depends on. The header of
+each fixture names the simulator revision that wrote it.
+
+Defects pinned there:
+
+| `test_known_issue_*` | Defect | Fix |
+|---|---|---|
+| `rbems_from_rb01_fills_fuel_level_and_battery_from_other_fields` (`test_ems_parser`) | RB-01 and the simulator send nine `$RBEMS` fields, ending fuel pressure, fuel 1, fuel 2, as the comment in `RB04_NMEA_Parser.c` documents; the parser reads eight, so fuel pressure lands in `fuelLevel` and fuel 1 in `batteryVoltage`. No screen draws either yet | settle one layout |
+| `altimeter_is_linear_in_pressure` (`test_slave`) | `Get_BMP280()` and `RB09_Slave_Loop()` compute altitude at 30 ft/hPa: 154 ft high at 3000 ft, 507 ft low at 10000 ft on a standard day. The recording's 908 hPa at QNH 1017 shows 3270 ft, ISA 3102 ft | the ISA pressure law in both |
+| `relative_altitude_moves_in_100_m_steps` (`test_traffic`) | `z / (100) * 3.28084` divides integers first: the FL difference moves in 328 ft steps and reads up to 3 FL short. The simulator's target 132 m above shows +3FL, not +4FL | `z * 3.28084 / 100` |
+
+Each was checked against a prototype fix in a scratch copy: it becomes a
+passing assertion, and the only other failures are the tests its comment names,
+which encode today's behaviour.
+
+`test_rbsim_rb09_gps_from_usb_is_not_echoed_back` pins, without judging it,
+that the NMEA output does not pass on GPS that came in on USB.
+
 ## Sanitizers
 
 Some defects are only visible with instrumentation:
@@ -137,8 +255,8 @@ they pin were undefined behaviour rather than wrong output.
   `esp_timer_get_time()`, last `lv_label_set_text()` string, …).
 * `main/RB/BuildMachine.h` is included by the firmware headers and must exist;
   copy any `BuildMachine-Template-*.h` there if it is missing. Feature flags a
-  suite needs beyond that (`RB_ENABLE_NavCore`, `RB_ENABLE_EMS`) are set per
-  target in `CMakeLists.txt`.
+  suite needs beyond that (`RB_ENABLE_NavCore`, `RB_ENABLE_EMS`,
+  `RB_ENABLE_SLAVE_DEVICE`) are set per target in `CMakeLists.txt`.
 * **That file decides which suites can build.** `RB02_Defines.h` includes it by
   quoted path, so a quoted include always resolves next to `RB02_Defines.h` and
   no `-I` ordering can shadow it. `test_traffic` needs `RB02_ESP_BLUETOOTH` or
@@ -168,7 +286,8 @@ they pin were undefined behaviour rather than wrong output.
 
 Files that are `#include`d as `.c` from another translation unit (for example
 `RB04_EMS_Setup.c` from `RB02_Setup.c`) can only be tested together with their
-includer.
+includer. Code inside a file too large to compile on the host can be cut out
+at configure time instead; `test_gps` does that for `RB02.c`.
 
 A test that needs a fixture should build its path from `RB_TEST_DIR`, which
 CMake defines as this directory, so the binary runs from anywhere.

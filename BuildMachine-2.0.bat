@@ -126,6 +126,9 @@ for %%P in (18 19 20) do (
 
   call :build TOUCH-30hz-USB-2.1 "main\RB\BuildMachine-Template-RB-02-" "RB-02-" app %%P
   call :build TOUCH-30hz-USB-2.8 "main\RB\BuildMachine-Template-RB-02-" "RB-02-" app %%P
+
+  call :build TOUCH-30hz-USB-2.1 "main\RB\BuildMachine-Template-RB-09-" "RB-09-" app %%P
+  call :build TOUCH-30hz-USB-2.8 "main\RB\BuildMachine-Template-RB-09-" "RB-09-" app %%P
 )
 
 echo All builds completed.
