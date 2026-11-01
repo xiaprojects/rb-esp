@@ -1,12 +1,19 @@
 /*
  * Unit tests for RB04_NMEA_EMS_ParseData() in main/RB/RB04_NMEA_Parser.c.
  *
- * Sentence layout as implemented (differs from the stale comment in the source):
+ * Sentence layout as implemented:
  *   $RBEMS,rpm,map,oilT,oilP,coolantT,outT,fuelLevel,batteryV*hh
  *   $RBCYL,cht1,cht2,cht3,cht4,egt1,egt2,egt3,egt4*hh
+ *
+ * RB-01 and the RB Simulator send a different $RBEMS: the one the comment in
+ * the source documents, with fuel pressure, fuel 1 and fuel 2 after outT.
+ * See the RB Simulator section at the bottom.
  */
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "unity.h"
+#include "fixture_lines.h"
 #include "RB02_Config.h"
 
 uint8_t RB04_NMEA_EMS_ParseData(const uint8_t *data, uint8_t len, RB04_EMSData *emsData);
@@ -207,8 +214,109 @@ void test_known_issue_unrelated_sentence_marks_data_fresh(void)
     TEST_ASSERT_EQUAL_UINT8(30, ems.obsoleteData);
 }
 
+/* ---- RB Simulator, profile rb04 ------------------------------------------ */
+
+/* fixtures/rbsim/rb04.nmea is what the RB Simulator sends an RB-04, recorded
+ * by tools/record_rbsim.sh. It writes $RBEMS in RB-01's order, roastbeef
+ * main/ems.go makeRBEMSString(), not in the order this parser reads. */
+enum { RB01_RPM, RB01_MAP, RB01_OIL_T, RB01_OIL_P, RB01_COOLANT_T, RB01_OUT_T,
+       RB01_FUEL_P, RB01_FUEL_1, RB01_FUEL_2, RB01_RBEMS_FIELDS };
+
+static fixture_lines_t rb04;
+
+/* RB_Usb.c: one line per call, CR/LF stripped, NUL-terminated. */
+static int replay_rb04(void)
+{
+    int parsed = 0;
+    for (int i = 0; i < rb04.count; i++)
+        parsed += RB04_NMEA_EMS_ParseData((const uint8_t *)rb04.line[i], (uint8_t)rb04.len[i], &ems);
+    return parsed;
+}
+
+static const char *last_rb04(const char *name)
+{
+    for (int i = rb04.count - 1; i >= 0; i--)
+        if (fixture_is(rb04.line[i], name))
+            return rb04.line[i];
+    TEST_FAIL_MESSAGE("sentence not in the recording");
+    return NULL;
+}
+
+/* Field n of the last `name` in the recording, read independently */
+static int last_rb04_field(const char *name, int n)
+{
+    char f[12][FIXTURE_FIELD_MAX];
+    int nf = fixture_fields(last_rb04(name), f, 12);
+    TEST_ASSERT_TRUE(n + 1 < nf);
+    return (int)strtol(f[n + 1], NULL, 10);
+}
+
+void test_rbsim_rb04_recording_is_what_the_tests_assume(void)
+{
+    char f[12][FIXTURE_FIELD_MAX];
+    TEST_ASSERT_TRUE(fixture_count(&rb04, "RBEMS") >= 100);
+    TEST_ASSERT_TRUE(fixture_count(&rb04, "RBCYL") >= 10);
+    TEST_ASSERT_EQUAL_INT(1 + RB01_RBEMS_FIELDS, fixture_fields(last_rb04("RBEMS"), f, 12));
+    TEST_ASSERT_EQUAL_INT(1 + 2 * RB_EMS_VERTICAL_BARS_NUMBER, fixture_fields(last_rb04("RBCYL"), f, 12));
+}
+
+void test_rbsim_rb04_every_line_is_parsed(void)
+{
+    ems.obsoleteData = 30;
+    TEST_ASSERT_EQUAL_INT(rb04.count, replay_rb04());
+    TEST_ASSERT_EQUAL_UINT8(0, ems.obsoleteData);
+}
+
+/* What RB04_EMS_Tick() draws, and the two fields both layouts agree on */
+void test_rbsim_rb04_reaches_what_the_screen_shows(void)
+{
+    replay_rb04();
+    TEST_ASSERT_EQUAL_UINT16(last_rb04_field("RBEMS", RB01_RPM), ems.rpm);
+    TEST_ASSERT_EQUAL_UINT8(last_rb04_field("RBEMS", RB01_MAP), ems.manifoldPressure);
+    TEST_ASSERT_EQUAL_INT16(last_rb04_field("RBEMS", RB01_OIL_T), ems.oilTemperature);
+    TEST_ASSERT_EQUAL_INT16(last_rb04_field("RBEMS", RB01_OUT_T), ems.outTemperature);
+    TEST_ASSERT_EQUAL_UINT8(last_rb04_field("RBEMS", RB01_OIL_P), ems.oilPressure);
+    TEST_ASSERT_EQUAL_INT16(last_rb04_field("RBEMS", RB01_COOLANT_T), ems.coolantTemperature);
+    for (int c = 0; c < RB_EMS_VERTICAL_BARS_NUMBER; c++)
+    {
+        TEST_ASSERT_EQUAL_INT16(last_rb04_field("RBCYL", c), ems.chtCelsius[c]);
+        TEST_ASSERT_EQUAL_INT16(last_rb04_field("RBCYL", RB_EMS_VERTICAL_BARS_NUMBER + c), ems.egtCelsius[c]);
+    }
+}
+
+void test_known_issue_rbems_from_rb01_fills_fuel_level_and_battery_from_other_fields(void)
+{
+    /* RB-01 (roastbeef ems.go) and the RB Simulator send nine $RBEMS fields,
+     * ending fuelPressure, fuel1, fuel2, as the comment at the top of
+     * RB04_NMEA_Parser.c also documents. The parser reads eight, the 7th into
+     * fuelLevel and the 8th into batteryVoltage: an RB-04 fed by RB-01 holds
+     * the fuel pressure as its fuel level and the left tank as its battery
+     * voltage, and drops the right tank. RB04_EMS_Tick() draws neither field
+     * yet, so nothing wrong is on screen today. Fix: settle one layout, by
+     * parsing RB-01's (fuel pressure and both tanks in RB04_EMSData, no
+     * battery) or by changing both senders. Five of the $RBEMS tests above
+     * encode the parser's current reading and change with it. */
+    ems.fuelLevel = 0xA5;
+    ems.batteryVoltage = 0xA5;
+    const char *line = last_rb04("RBEMS");
+    parse(line);
+    int fuelPressure = last_rb04_field("RBEMS", RB01_FUEL_P);
+    int fuel1 = last_rb04_field("RBEMS", RB01_FUEL_1);
+    if (ems.fuelLevel == fuelPressure || ems.batteryVoltage == fuel1)
+    {
+        static char msg[200];
+        snprintf(msg, sizeof(msg),
+                 "known issue: %s in RB-01's order gives fuelLevel %u (its fuel pressure) and batteryVoltage %u (its fuel 1) (RB04_NMEA_Parser.c)",
+                 line, ems.fuelLevel, ems.batteryVoltage);
+        TEST_IGNORE_MESSAGE(msg);
+    }
+    TEST_ASSERT_NOT_EQUAL(fuelPressure, ems.fuelLevel);
+    TEST_ASSERT_NOT_EQUAL(fuel1, ems.batteryVoltage);
+}
+
 int main(void)
 {
+    rb04 = fixture_lines_load(RB_TEST_DIR "/fixtures/rbsim/rb04.nmea");
     UNITY_BEGIN();
     RUN_TEST(test_rbems_full_sentence);
     RUN_TEST(test_rbems_without_checksum_or_line_ending);
@@ -231,5 +339,11 @@ int main(void)
     RUN_TEST(test_max_length_input_does_not_overflow);
     RUN_TEST(test_successful_parse_marks_data_fresh);
     RUN_TEST(test_known_issue_unrelated_sentence_marks_data_fresh);
-    return UNITY_END();
+    RUN_TEST(test_rbsim_rb04_recording_is_what_the_tests_assume);
+    RUN_TEST(test_rbsim_rb04_every_line_is_parsed);
+    RUN_TEST(test_rbsim_rb04_reaches_what_the_screen_shows);
+    RUN_TEST(test_known_issue_rbems_from_rb01_fills_fuel_level_and_battery_from_other_fields);
+    int failures = UNITY_END();
+    fixture_lines_free(&rb04);
+    return failures;
 }

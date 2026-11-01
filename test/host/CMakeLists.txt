@@ -91,11 +91,71 @@ endfunction()
 # ---- Test suites --------------------------------------------------------------
 rb_add_test(test_madgwick   "${RB_MAIN}/RB/madgwick.c")
 rb_add_test(test_guihelpers "${RB_MAIN}/RB/RB02_GUIHelpers.c")
-rb_add_test(test_ems_parser "${RB_MAIN}/RB/RB04_NMEA_Parser.c")
-target_compile_definitions(test_ems_parser PRIVATE RB_ENABLE_EMS=1)
+rb_add_test(test_ems_parser "${RB_MAIN}/RB/RB04_NMEA_Parser.c" sim/fixture_lines.c)
+target_compile_definitions(test_ems_parser PRIVATE RB_ENABLE_EMS=1 RB_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(test_ems_parser PRIVATE sim)
 
 rb_add_test(test_ec11 "${RB_MAIN}/RB/RB02_NavCore.c")
 target_compile_definitions(test_ec11 PRIVATE RB_ENABLE_NavCore=1)
+
+# RB-09 remote display: $RBATT / $RBAIR -> RB09_SlaveData -> the instrument
+# variables. RB_ENABLE_SLAVE_DEVICE is forced, so it builds on every BuildMachine.h.
+rb_add_test(test_slave "${RB_MAIN}/RB/RB09_Slave.c" "${RB_MAIN}/RB/RB02_GUIHelpers.c" sim/fixture_lines.c)
+target_compile_definitions(test_slave PRIVATE RB_ENABLE_SLAVE_DEVICE=1 RB_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(test_slave PRIVATE sim "${RB_MAIN}/I2C_Driver" "${RB_MAIN}/QMI8658")
+
+# GPS: the $GPRMC / $GPGGA scanners and NMEA_ParseBuffer() live in RB02.c, the
+# application core, which cannot be compiled on the host without faking most
+# of LVGL. Moving them to their own file would rewrite blame on code under
+# active work, so cut that section out of RB02.c at configure time and compile
+# only the slice. Editing RB02.c re-runs this; the #line directive keeps
+# compiler and sanitizer reports pointing at RB02.c itself.
+get_filename_component(RB_RB02_C "${RB_MAIN}/RB/RB02.c" REALPATH)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${RB_RB02_C}")
+file(READ "${RB_RB02_C}" rb02_src)
+
+# From the `#ifdef RB_ENABLE_GPS` that opens nmea_GGA_UpdatedValueFor() ...
+string(FIND "${rb02_src}" "void nmea_GGA_UpdatedValueFor(" rb02_fn)
+if(rb02_fn EQUAL -1)
+  message(FATAL_ERROR "test_gps: nmea_GGA_UpdatedValueFor() not found in RB02.c; update the slice markers")
+endif()
+string(SUBSTRING "${rb02_src}" 0 ${rb02_fn} rb02_head)
+string(FIND "${rb02_head}" "#ifdef RB_ENABLE_GPS" rb02_begin REVERSE)
+string(SUBSTRING "${rb02_head}" ${rb02_begin} -1 rb02_gap)
+if(rb02_begin EQUAL -1 OR NOT rb02_gap MATCHES "^#ifdef RB_ENABLE_GPS[ \t\r\n]*$")
+  message(FATAL_ERROR "test_gps: expected `#ifdef RB_ENABLE_GPS` right before nmea_GGA_UpdatedValueFor() in RB02.c")
+endif()
+
+# ... to the `#endif` that closes the NMEA_ParseBuffer() definition.
+string(SUBSTRING "${rb02_src}" ${rb02_fn} -1 rb02_tail)
+string(REGEX MATCH "void NMEA_ParseBuffer\\([^)]*\\)[ \t\r]*\n{" rb02_def "${rb02_tail}")
+string(FIND "${rb02_tail}" "${rb02_def}" rb02_def_at)
+if(NOT rb02_def OR rb02_def_at EQUAL -1)
+  message(FATAL_ERROR "test_gps: NMEA_ParseBuffer() definition not found in RB02.c")
+endif()
+string(SUBSTRING "${rb02_tail}" ${rb02_def_at} -1 rb02_body)
+string(FIND "${rb02_body}" "\n}" rb02_close)
+string(SUBSTRING "${rb02_body}" ${rb02_close} -1 rb02_after)
+if(rb02_close EQUAL -1 OR NOT rb02_after MATCHES "^\n}[ \t\r]*\n#endif")
+  message(FATAL_ERROR "test_gps: expected `#endif` right after the NMEA_ParseBuffer() body in RB02.c")
+endif()
+string(FIND "${rb02_after}" "#endif" rb02_endif)
+math(EXPR rb02_len "${rb02_fn} + ${rb02_def_at} + ${rb02_close} + ${rb02_endif} + 6 - ${rb02_begin}")
+string(SUBSTRING "${rb02_src}" ${rb02_begin} ${rb02_len} rb02_slice)
+
+string(SUBSTRING "${rb02_src}" 0 ${rb02_begin} rb02_before)
+string(REGEX MATCHALL "\n" rb02_nl "${rb02_before}")
+list(LENGTH rb02_nl rb02_line)
+math(EXPR rb02_line "${rb02_line} + 1")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gen/rb02_gps_slice.inc.tmp"
+  "#line ${rb02_line} \"${RB_RB02_C}\"\n${rb02_slice}\n")
+configure_file("${CMAKE_CURRENT_BINARY_DIR}/gen/rb02_gps_slice.inc.tmp"
+               "${CMAKE_CURRENT_BINARY_DIR}/gen/rb02_gps_slice.inc" COPYONLY)
+message(STATUS "test_gps: RB02.c GPS slice starts at line ${rb02_line}")
+
+rb_add_test(test_gps "${RB_MAIN}/RB/RB02_GUIHelpers.c" sim/fixture_lines.c)
+target_compile_definitions(test_gps PRIVATE RB_ENABLE_GPS=1 RB_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(test_gps PRIVATE sim "${CMAKE_CURRENT_BINARY_DIR}/gen")
 
 # Traffic integration: FLARM / ADS-B sentences -> parser -> store -> screens.
 # Driven by the fixtures in fixtures/ via the transport simulator in sim/.
@@ -117,6 +177,7 @@ elseif(RB_HAS_TRK)
 else()
   rb_add_test(test_traffic
     sim/traffic_replay.c
+    sim/fixture_lines.c
     "${RB_MAIN}/RB/RB05_FlarmParser.c"
     "${RB_MAIN}/RB/RB05_Traffic.c"
     "${RB_MAIN}/RB/RB05_Radar.c"

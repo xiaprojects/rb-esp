@@ -14,9 +14,16 @@
 
 /* ---- esp_timer ---------------------------------------------------------- */
 static int64_t s_now_us = 0;
+static int64_t s_autoadvance_us = 0;
 
-int64_t esp_timer_get_time(void) { return s_now_us; }
+int64_t esp_timer_get_time(void)
+{
+    int64_t now = s_now_us;
+    s_now_us += s_autoadvance_us;
+    return now;
+}
 void host_stub_set_time_us(int64_t us) { s_now_us = us; }
+void host_stub_set_time_autoadvance_us(int64_t us) { s_autoadvance_us = us; }
 void host_stub_advance_ms(uint32_t ms) { s_now_us += (int64_t)ms * 1000; }
 uint32_t host_stub_now_ms(void) { return (uint32_t)(s_now_us / 1000); }
 

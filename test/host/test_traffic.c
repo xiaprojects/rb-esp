@@ -22,9 +22,11 @@
  *             flight-level difference (hundreds of feet)
  */
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 #include "unity.h"
 #include "host_stubs.h"
+#include "fixture_lines.h"
 #include "traffic_replay.h"
 #include "RB02_Config.h"
 #include "RB05_FlarmParser.h"
@@ -38,18 +40,34 @@
 #endif
 #define FIXTURE_FLARM    RB_TEST_DIR "/fixtures/flarm_session.nmea"
 #define FIXTURE_DUMP1090 RB_TEST_DIR "/fixtures/dump1090_traffic.nmea"
+#define FIXTURE_RBSIM    RB_TEST_DIR "/fixtures/rbsim/rb05.nmea"
 
 /* ---- firmware globals owned by the test ---------------------------------- */
 datetime_t datetime = {0};
 float AttitudeYaw = 0.0f;
 
-static uint8_t operative_bluetooth;
+static uint8_t operative_bluetooth, operative_flarm;
 void RB02_Config_Set_OperativeBluetooth(uint8_t operative) { operative_bluetooth = operative; }
+/* RB_ENABLE_USB_FLARM builds (RB-05 wired) report the FLARM input here */
+void RB02_Config_Set_OperativeFlarm(uint8_t operative) { operative_flarm = operative; }
+
+/* The links a $PFLAU marks live on this build: BLE, USB FLARM, or both */
+static uint8_t traffic_link_operative(void)
+{
+    uint8_t operative = 1;
+#ifdef RB02_ESP_BLUETOOTH
+    operative &= operative_bluetooth;
+#endif
+#ifdef RB_ENABLE_USB_FLARM
+    operative &= operative_flarm;
+#endif
+    return operative;
+}
 
 extern FlarmStatus flarmStatus;
 
 /* ---- fixtures and screen under test -------------------------------------- */
-static replay_fixture_t fx_flarm, fx_dump1090;
+static replay_fixture_t fx_flarm, fx_dump1090, fx_rbsim;
 static RB05_TrafficStatus ts;
 static lv_obj_t *screen_root;
 
@@ -109,6 +127,7 @@ void setUp(void)
     replay_set_clock(0, 0, 0);
     AttitudeYaw = 0.0f;
     operative_bluetooth = 0;
+    operative_flarm = 0;
     build_screens();
 }
 
@@ -146,11 +165,11 @@ void test_bulk_read_loses_no_traffic(void)
     TEST_ASSERT_GREATER_OR_EQUAL_INT(line_count, stored_count());
 }
 
-void test_pflau_marks_the_bluetooth_link_operative(void)
+void test_pflau_marks_the_traffic_link_operative(void)
 {
-    TEST_ASSERT_EQUAL_UINT8(0, operative_bluetooth);
+    TEST_ASSERT_EQUAL_UINT8(0, traffic_link_operative());
     replay_cycles(&fx_flarm, REPLAY_LINE, 0, 1);
-    TEST_ASSERT_EQUAL_UINT8(1, operative_bluetooth);
+    TEST_ASSERT_EQUAL_UINT8(1, traffic_link_operative());
 }
 
 void test_non_traffic_sentences_are_ignored(void)
@@ -279,6 +298,41 @@ void test_traffic_list_is_empty_with_no_traffic(void)
     replay_set_clock(2, 0, 30);
     RB05_Traffic_Tick(&ts);
     TEST_ASSERT_EQUAL_STRING("", ts.lv_lines->text);
+}
+
+void test_known_issue_relative_altitude_moves_in_100_m_steps(void)
+{
+    /* RB05_Traffic.c and RB05_Radar.c show `z / (100) * 3.28084` with z an
+     * int16_t, so the division is an integer one: the flight-level difference
+     * moves in 100 m (328 ft) steps and reads up to 3 FL short. The RB
+     * Simulator's target, 132 m (433 ft) above, shows +3FL rather than +4FL.
+     * Fix: `z * 3.28084 / 100`. The vertical filter in both files compares
+     * the same expression, and the +318FL that three other tests expect for
+     * 9778 m becomes +321FL. */
+    replay_set_clock(2, 0, 30);
+    int wrong = 0;
+    long shown_132 = 0;
+    for (int z = -1000; z <= 1000; z++)
+    {
+        inject(0, "F84DDF", "AI0042", 1008, 2949, (int16_t)z, 90, replay_clock_seconds());
+        RB05_Traffic_Tick(&ts);
+        RB05_Radar_Tick(&ts);
+        long shown = strtol(ts.lv_lines->text + 1, NULL, 10);
+        long on_radar = strtol(ts.lv_obstacles_label[0]->text, NULL, 10);
+        /* the nearest FL; either way at an exact half */
+        double fl = z * 3.28084 / 100;
+        wrong += fabs(shown - fl) > 0.5001 || fabs(on_radar - fl) > 0.5001;
+        if (z == 132)
+            shown_132 = shown;
+    }
+    if (wrong > 0)
+    {
+        static char msg[160];
+        snprintf(msg, sizeof(msg),
+                 "known issue: %d of 2001 heights from -1000 to +1000 m show the wrong FL, +132 m as %+ldFL (RB05_Traffic.c, RB05_Radar.c)",
+                 wrong, shown_132);
+        TEST_IGNORE_MESSAGE(msg);
+    }
 }
 
 /* ====================================================================== */
@@ -454,6 +508,93 @@ void test_dump1090_altitudes_survive_the_conversion(void)
      * 9753 - 278 = 9475 m relative -> +311 FL on screen. */
     replay_cycles(&fx_dump1090, REPLAY_LINE, 0, 1);
     TEST_ASSERT_INT16_WITHIN(5, 9476, obstacle("4CA8AF")->z);
+}
+
+/* fixtures/rbsim/rb05.nmea is what the RB Simulator sends an RB-05 (its rb05
+ * profile), recorded by tools/record_rbsim.sh: a $GPRMC, then the $PFLAA
+ * lines and one $PFLAU every second, in roastbeef traffic.go's order, for
+ * one synthetic target circling 3 km out. Expected values come from the last
+ * $PFLAA, read independently of the parser. */
+typedef struct {
+    char id[7], tail[16];
+    int16_t north, east, vertical, track;
+} rbsim_target_t;
+
+static rbsim_target_t rbsim_last_target(void)
+{
+    fixture_lines_t lines = fixture_lines_load(FIXTURE_RBSIM);
+    const char *pflaa = NULL;
+    for (int i = 0; i < lines.count; i++)
+        if (fixture_is(lines.line[i], "PFLAA"))
+            pflaa = lines.line[i];
+    TEST_ASSERT_NOT_NULL_MESSAGE(pflaa, "no $PFLAA in the recording");
+    char f[16][FIXTURE_FIELD_MAX];
+    TEST_ASSERT_EQUAL_INT(12, fixture_fields(pflaa, f, 16));
+    rbsim_target_t t;
+    t.north = (int16_t)strtol(f[2], NULL, 10);
+    t.east = (int16_t)strtol(f[3], NULL, 10);
+    t.vertical = (int16_t)strtol(f[4], NULL, 10);
+    t.track = (int16_t)strtol(f[7], NULL, 10);
+    char *bang = strchr(f[6], '!');
+    TEST_ASSERT_NOT_NULL_MESSAGE(bang, "the simulator sends ID!callsign");
+    snprintf(t.id, sizeof(t.id), "%.*s", (int)(bang - f[6]), f[6]);
+    snprintf(t.tail, sizeof(t.tail), "%s", bang + 1);
+    fixture_lines_free(&lines);
+    return t;
+}
+
+void test_rbsim_session_gives_the_same_target_on_every_transport(void)
+{
+    static const replay_mode_t modes[] = { REPLAY_LINE, REPLAY_BULK, REPLAY_BLE };
+    static const char *names[] = { "line", "bulk", "ble" };
+    rbsim_target_t t = rbsim_last_target();
+    for (unsigned m = 0; m < sizeof(modes) / sizeof(modes[0]); m++)
+    {
+        setUp();
+        replay_all(&fx_rbsim, modes[m], 0);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(1, stored_count(), names[m]);
+        const FlarmObstacle *o = obstacle(t.id);
+        TEST_ASSERT_EQUAL_STRING_MESSAGE(t.tail, o->tail, names[m]);
+        TEST_ASSERT_EQUAL_INT16_MESSAGE(t.east, o->x, names[m]);
+        TEST_ASSERT_EQUAL_INT16_MESSAGE(t.north, o->y, names[m]);
+        TEST_ASSERT_EQUAL_INT16_MESSAGE(t.vertical, o->z, names[m]);
+        TEST_ASSERT_EQUAL_INT16_MESSAGE(t.track, o->bearing, names[m]);
+        TEST_ASSERT_EQUAL_UINT8_MESSAGE(1, traffic_link_operative(), names[m]);
+    }
+}
+
+void test_rbsim_session_reaches_both_screens(void)
+{
+    rbsim_target_t t = rbsim_last_target();
+    replay_all(&fx_rbsim, REPLAY_LINE, 0);
+
+    RB05_Traffic_Tick(&ts);
+    TEST_ASSERT_NOT_NULL(strstr(ts.lv_lines->text, t.tail));
+
+    /* Zoom 7: 16 NM from the centre to the edge of the 480 px face, north up,
+     * screen +y down, the icon's nose at the target's track */
+    RB05_Radar_Tick(&ts);
+    int8_t slot = find_slot(t.id);
+    lv_obj_t *icon = ts.lv_obstacles[slot];
+    TEST_ASSERT_FALSE(lv_obj_has_flag(icon, LV_OBJ_FLAG_HIDDEN));
+    TEST_ASSERT_INT_WITHIN(1, (int)(t.east / 1852.0 / 16 * 240), icon->x);
+    TEST_ASSERT_INT_WITHIN(1, (int)(-t.north / 1852.0 / 16 * 240), icon->y);
+    TEST_ASSERT_EQUAL_INT16(t.track * 10, icon->angle);
+    TEST_ASSERT_NOT_NULL(strstr(ts.lv_obstacles_label[slot]->text, t.tail));
+}
+
+/* The simulator stops: a minute later the target is gone from both screens */
+void test_rbsim_target_ages_out_when_the_simulator_stops(void)
+{
+    rbsim_target_t t = rbsim_last_target();
+    replay_all(&fx_rbsim, REPLAY_LINE, 0);
+    uint32_t later = (replay_clock_seconds() + RB_TRAFFIC_STALE_SECONDS + 1) % 86400;
+    replay_set_clock((uint8_t)(later / 3600), (uint8_t)(later / 60 % 60), (uint8_t)(later % 60));
+
+    RB05_Traffic_Tick(&ts);
+    TEST_ASSERT_NULL(strstr(ts.lv_lines->text, t.tail));
+    RB05_Radar_Tick(&ts);
+    TEST_ASSERT_TRUE(lv_obj_has_flag(ts.lv_obstacles[find_slot(t.id)], LV_OBJ_FLAG_HIDDEN));
 }
 
 /* ====================================================================== */
@@ -913,12 +1054,13 @@ int main(void)
 {
     fx_flarm = replay_load(FIXTURE_FLARM);
     fx_dump1090 = replay_load(FIXTURE_DUMP1090);
+    fx_rbsim = replay_load(FIXTURE_RBSIM);
 
     UNITY_BEGIN();
 
     RUN_TEST(test_line_framed_capture_populates_the_store);
     RUN_TEST(test_bulk_read_loses_no_traffic);
-    RUN_TEST(test_pflau_marks_the_bluetooth_link_operative);
+    RUN_TEST(test_pflau_marks_the_traffic_link_operative);
     RUN_TEST(test_non_traffic_sentences_are_ignored);
 
     RUN_TEST(test_aircraft_identity_comes_from_the_icao_hex);
@@ -934,6 +1076,7 @@ int main(void)
     RUN_TEST(test_traffic_list_omits_aircraft_silent_for_over_60s);
     RUN_TEST(test_traffic_list_applies_the_vertical_filter);
     RUN_TEST(test_traffic_list_is_empty_with_no_traffic);
+    RUN_TEST(test_known_issue_relative_altitude_moves_in_100_m_steps);
 
     RUN_TEST(test_radar_starts_at_zoom_level_7);
     RUN_TEST(test_radar_places_a_target_by_relative_geometry);
@@ -949,6 +1092,9 @@ int main(void)
     RUN_TEST(test_flarm_session_reaches_both_screens);
     RUN_TEST(test_dump1090_derived_session_reaches_both_screens);
     RUN_TEST(test_dump1090_altitudes_survive_the_conversion);
+    RUN_TEST(test_rbsim_session_gives_the_same_target_on_every_transport);
+    RUN_TEST(test_rbsim_session_reaches_both_screens);
+    RUN_TEST(test_rbsim_target_ages_out_when_the_simulator_stops);
 
     RUN_TEST(test_negative_coordinates_round_trip);
     RUN_TEST(test_negative_magnitudes_are_exact_at_every_digit_count);
@@ -975,5 +1121,6 @@ int main(void)
     int rc = UNITY_END();
     replay_free(&fx_flarm);
     replay_free(&fx_dump1090);
+    replay_free(&fx_rbsim);
     return rc;
 }

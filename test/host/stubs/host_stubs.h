@@ -16,6 +16,9 @@ void host_stub_set_time_us(int64_t us);
 void host_stub_advance_ms(uint32_t ms);
 /* Convenience: current fake time in milliseconds. */
 uint32_t host_stub_now_ms(void);
+/* Advance the fake clock by `us` after every esp_timer_get_time() call, i.e.
+ * let time pass while the code under test runs. 0 (the default) disables it. */
+void host_stub_set_time_autoadvance_us(int64_t us);
 
 /* ---- LVGL --------------------------------------------------------------- */
 /* Text passed to the most recent lv_label_set_text() call ("" if none). */
