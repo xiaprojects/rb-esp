@@ -21,6 +21,11 @@
  * 03 -> Display with Autopilot, ADSB, Radio, Flight Computer
  * 04 -> Display with EMS: Engine monitoring system
  * 05 -> Display with Stratux BLE Traffic
+ * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+ * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * 09 -> Display with Slave device for RB-01, RB-02, RB-03, RB-04, RB-05, RB-06, RB-07 and RB-08
+ * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  * 
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available
@@ -72,6 +77,8 @@
 #define RB_PRODUCT_TITLE "RB 05"
 #elif RB_PRODUCT_LINE == 7
 #define RB_PRODUCT_TITLE "RB 07"
+#elif RB_PRODUCT_LINE == 9
+#define RB_PRODUCT_TITLE "RB 09"
 #else
 #error Product not found
 #endif
@@ -162,6 +169,12 @@
 #define RB04_PROTOCOL_BLE         2      // EMS Remote device connected via BLUETOOTH BLE CHAR channel
 #define RB04_PROTOCOL_RS485       3      // EMS Remote device connected via RS485 channel
 #define RB04_PROTOCOL RB04_PROTOCOL_SIMULATOR
+#endif
+
+// 1.7.2 RB-09 Remote display SLAVE: attitude and air data from $RBATT / $RBAIR over USB, see RB09_Slave.c
+//#define RB_ENABLE_SLAVE_DEVICE 1
+#ifdef RB_ENABLE_SLAVE_DEVICE
+#define RB_ENABLE_IAS 1      // $RBAIR carries the indicated air speed
 #endif
 
 

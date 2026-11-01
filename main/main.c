@@ -24,6 +24,7 @@
  * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
  * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
  * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * 09 -> Display with Slave device for RB-01, RB-02, RB-03, RB-04, RB-05, RB-06, RB-07 and RB-08
  * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  *
  * Community edition will be free for all builders and personal use as defined by the licensing model
@@ -169,7 +170,6 @@ void Driver_Init(void)
         RB02_BluetoothLowEnergy_Init();
     }
 #endif
-
     xTaskCreatePinnedToCore(
         Driver_Loop,
         "Other Driver task",
@@ -190,7 +190,7 @@ void RB_Debug_Update_Label(int x,int y,int c)
 }
 #endif
 
-#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)
+#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA) ||  defined(RB_ENABLE_SLAVE_DEVICE)
 // External Commercial feature - USB Console input thread for FLARM and NMEA parsing
 #include "RB_Usb.c"
 #endif
@@ -208,7 +208,7 @@ void app_main(void)
     }
     Driver_Init();
 
-#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)||  defined(RB_ENABLE_EMS)
+#if defined(RB_ENABLE_USB_FLARM) ||  defined(RB_ENABLE_USB_NMEA)||  defined(RB_ENABLE_EMS) ||  defined(RB_ENABLE_SLAVE_DEVICE)
     setvbuf(stdin, NULL, _IONBF, 0);
     // Create USB Console input thread
     xTaskCreatePinnedToCore(

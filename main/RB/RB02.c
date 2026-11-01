@@ -24,6 +24,7 @@
  * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
  * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
  * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * 09 -> Display with Slave device for RB-01, RB-02, RB-03, RB-04, RB-05, RB-06, RB-07 and RB-08
  * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  *
  * Community edition will be free for all builders and personal use as defined by the licensing model
@@ -126,6 +127,9 @@ void DidYouJoinedDiscord()
 #include "RB05_Traffic.h"
 #include "RB05_Radar.h"
 #endif
+
+// Every build: a master sends the $RBAIR an RB-09 reads
+#include "RB09_Slave.h"
 
 #if RB_LICENSE_TYPE == RB_LICENSE_TYPE_COMMERCIAL
 #include "RB_License.h"
@@ -935,26 +939,44 @@ uint16_t nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
   int8_t csvCounter = 0;
   int8_t decimalCounter = 0;
   int8_t decimalEnabled = 0;
+  int8_t sign = 1;
+  uint8_t inChecksum = 0;
+  uint8_t sawEnd = 0;
 
   int32_t finalNumber = 0;
-  uint8_t x = 0;
+  uint16_t x = 0;
+  // NOTE: non-digits are deliberately still fed to the accumulator here. The
+  // hemisphere cases in nmea_RMC_UpdatedValueFor() recover the N/S/E/W letter
+  // with `finalNumber + '0'`, which only works while a lone letter round-trips
+  // through this branch. The checksum is excluded via inChecksum below.
   for (; x < length; x++)
   {
-    if (sentence[x] == 0)
+    if (sentence[x] == 0 || sentence[x] == '\n' || sentence[x] == '\r')
+    {
+      sawEnd = 1;
       break;
+    }
+    if (sentence[x] == '*')
+    {
+      // Checksum delimiter: deliver the pending field and stop consuming, but
+      // keep scanning so the returned length still spans the whole sentence
+      // (the NMEA passthrough at NMEA_ParseBuffer() relies on that).
+      nmea_RMC_UpdatedValueFor(csvCounter, sign * finalNumber, decimalCounter);
+      inChecksum = 1;
+      continue;
+    }
+    if (inChecksum)
+      continue;
     if (sentence[x] == ',')
     {
-      nmea_RMC_UpdatedValueFor(csvCounter, finalNumber, decimalCounter);
+      nmea_RMC_UpdatedValueFor(csvCounter, sign * finalNumber, decimalCounter);
       decimalCounter = 0;
       csvCounter++;
       decimalEnabled = 0;
       finalNumber = 0;
+      sign = 1;
       continue;
     }
-    if (sentence[x] == '\n')
-      break;
-    if (sentence[x] == '\r')
-      break;
     if (sentence[x] == '.')
     {
       decimalEnabled = 1;
@@ -962,7 +984,7 @@ uint16_t nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
     }
     if (sentence[x] == '-')
     {
-      finalNumber = finalNumber - 1;
+      sign = -1;
     }
     else
     {
@@ -970,6 +992,11 @@ uint16_t nmea_RMC_mini_parser(const uint8_t *sentence, uint16_t length)
       finalNumber = 10 * finalNumber + (sentence[x] - '0');
     }
   }
+  // Deliver the last field, but only for a sentence that actually ended here.
+  // A raw stream read can stop mid-field, and delivering that partial value
+  // would be worse than dropping it.
+  if (inChecksum == 0 && sawEnd)
+    nmea_RMC_UpdatedValueFor(csvCounter, sign * finalNumber, decimalCounter);
 
   GPSLastSpeedKmhReceivedTick = now;
 
@@ -983,25 +1010,38 @@ uint16_t nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
 
   int8_t decimalCounter = 0;
   int8_t decimalEnabled = 0;
+  int8_t sign = 1;
+  uint8_t inChecksum = 0;
+  uint8_t sawEnd = 0;
   int32_t finalNumber = 0;
-  uint8_t x = 0;
+  uint16_t x = 0;
+  // See the note in nmea_RMC_mini_parser(): non-digits still reach the
+  // accumulator on purpose, the checksum is excluded via inChecksum.
   for (; x < length; x++)
   {
-    if (sentence[x] == 0)
+    if (sentence[x] == 0 || sentence[x] == '\n' || sentence[x] == '\r')
+    {
+      sawEnd = 1;
       break;
+    }
+    if (sentence[x] == '*')
+    {
+      nmea_GGA_UpdatedValueFor(csvCounter, sign * finalNumber, decimalCounter);
+      inChecksum = 1;
+      continue;
+    }
+    if (inChecksum)
+      continue;
     if (sentence[x] == ',')
     {
-      nmea_GGA_UpdatedValueFor(csvCounter, finalNumber, decimalCounter);
+      nmea_GGA_UpdatedValueFor(csvCounter, sign * finalNumber, decimalCounter);
       decimalCounter = 0;
       csvCounter++;
       decimalEnabled = 0;
       finalNumber = 0;
+      sign = 1;
       continue;
     }
-    if (sentence[x] == '\n')
-      break;
-    if (sentence[x] == '\r')
-      break;
 
     if (sentence[x] == '.')
     {
@@ -1010,7 +1050,7 @@ uint16_t nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
     }
     if (sentence[x] == '-')
     {
-      finalNumber = finalNumber - 1;
+      sign = -1;
     }
     else
     {
@@ -1018,6 +1058,11 @@ uint16_t nmea_GGA_mini_parser(const uint8_t *sentence, uint16_t length)
       finalNumber = 10 * finalNumber + (sentence[x] - '0');
     }
   }
+  // Deliver the last field, but only for a sentence that actually ended here.
+  // A raw stream read can stop mid-field, and delivering that partial value
+  // would be worse than dropping it.
+  if (inChecksum == 0 && sawEnd)
+    nmea_GGA_UpdatedValueFor(csvCounter, sign * finalNumber, decimalCounter);
 
   return x;
 }
@@ -1741,6 +1786,12 @@ void update_Speed_lvgl_tick(lv_timer_t *t)
 #else
 
 #endif
+#if defined(RB_ENABLE_SLAVE_DEVICE)
+  // RB-09: the master's air speed from $RBAIR. Without one the needle reads 0
+  // under the INOP, never ground speed under "AIR SPEED".
+  speed = 0;
+  RB09_Slave_AirspeedKmh10(&singletonConfig()->slaveData, &speed);
+#endif
 
   if (speed != lastSpeed)
   {
@@ -1999,6 +2050,10 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
   // TODO: move in settings
   forcedCalibrationOnBoot = true;
 #endif
+#ifdef RB_ENABLE_SLAVE_DEVICE
+  // RB-09 has no sensor to calibrate: the master sends a calibrated attitude
+  forcedCalibrationOnBoot = false;
+#endif
   static int stepDown = 50;
   if (workflow > 100)
   {
@@ -2228,6 +2283,14 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
     }
   }
 
+#ifdef RB_ENABLE_SLAVE_DEVICE
+  // RB-09: RB09_Slave_Loop() adopted the master's QNH, labels are only touched from here
+  if (workflow > 100 && singletonConfig()->slaveData.qnhChanged != 0)
+  {
+    singletonConfig()->slaveData.qnhChanged = 0;
+    RB02_AltimeterQNHUpdated();
+  }
+#endif
   static uint16_t lastTab = 0;
 
   if (lastTab != ((lv_tabview_t *)tv)->tab_cur)
@@ -2260,6 +2323,10 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
         Operative_GPS = false;
       }
       isAttitudeDoNotNeedGPS = Operative_GPS;
+#endif
+#ifdef RB_ENABLE_SLAVE_DEVICE
+      // RB-09: any GPS compensation was applied by the master, inside the attitude it sends
+      isAttitudeDoNotNeedGPS = 1;
 #endif
 
       if (Operative_BMP280 && Operative_Attitude && isAttitudeDoNotNeedGPS && OperativeWarningVisible == true)
@@ -2369,14 +2436,19 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
     uart_fetch_data();
 #endif
     update_Speed_lvgl_tick(t);
-    if (Operative_GPS && OperativeWarningVisible == true)
+    uint8_t operativeSpeed = Operative_GPS;
+#ifdef RB_ENABLE_SLAVE_DEVICE
+    // RB-09: the needle is the master's air speed, not the GPS
+    operativeSpeed = RB09_Slave_AirspeedKmh10(&singletonConfig()->slaveData, NULL);
+#endif
+    if (operativeSpeed && OperativeWarningVisible == true)
     {
       lv_obj_add_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
       OperativeWarningVisible = false;
     }
     else
     {
-      if (Operative_GPS == 0 && OperativeWarningVisible == false)
+      if (operativeSpeed == 0 && OperativeWarningVisible == false)
       {
         lv_obj_clear_flag(OperativeWarning, LV_OBJ_FLAG_HIDDEN);
         OperativeWarningVisible = true;
@@ -2563,6 +2635,10 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
 #ifdef RB_ENABLE_GPS
     isAttitudeDoNotNeedGPS = Operative_GPS;
 #endif
+#ifdef RB_ENABLE_SLAVE_DEVICE
+    // RB-09: any GPS compensation was applied by the master, inside the attitude it sends
+    isAttitudeDoNotNeedGPS = 1;
+#endif
 
     if (Operative_Attitude && isAttitudeDoNotNeedGPS && OperativeWarningVisible == true)
     {
@@ -2738,6 +2814,13 @@ void rb_increase_lvgl_tick(lv_timer_t *t)
                0.0,
                AttitudeBalanceAlphaAerobatics);
         printf("%s*%02X\n", buf,nmeaChecksum(buf));
+        // 1.7.2 Air data for an RB-09 remote display, only while the barometer is
+        // operative so the slave's INOP follows this one
+        if (Operative_BMP280 != 0)
+        {
+          RB09_Slave_FormatAir(buf, sizeof(buf), bmp280Pressure, QNH, Variometer);
+          printf("%s*%02X\n", buf, nmeaChecksum(buf));
+        }
         }
 }
 

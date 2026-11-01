@@ -22,6 +22,12 @@
  * 02 -> Display with SixPack
  * 03 -> Display with Autopilot, ADSB, Radio, Flight Computer
  * 04 -> Display with EMS: Engine monitoring system
+ * 05 -> Display with Stratux BLE Traffic
+ * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+ * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * 09 -> Display with Slave device for RB-01, RB-02, RB-03, RB-04, RB-05, RB-06, RB-07 and RB-08
+ * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  * 
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available
@@ -107,6 +113,36 @@ typedef struct
     int16_t egtCelsius[RB_EMS_VERTICAL_BARS_NUMBER];
     uint8_t obsoleteData; /* Incremented at each update, used to detect if data is fresh or not */
 } RB04_EMSData;
+#endif
+
+#ifdef RB_ENABLE_SLAVE_DEVICE
+// RB-09: the last $RBATT / $RBAIR received from the master, see RB09_Slave.c
+typedef struct
+{
+    float roll;
+    float pitch;
+    float yaw;
+    IMUdata accel;
+    IMUdata gyro;
+    IMUdata gpsAcceleration;
+    IMUdata mag;
+    float compass;
+    float beta;
+    int64_t attitudeTick;        /* esp_timer_get_time() of the last valid $RBATT, 0 = never */
+    float pressureInHg;
+    float qnhInHg;
+    float outsideTemperature;    /* Celsius */
+    float variometerFeetMin;
+    float indicatedAirSpeedKmh;
+    float windKmh;
+    float windDirection;         /* degrees */
+    uint8_t airPresent;          /* bit RB09_RBAIR_*: that field was valid, else it reads 0 */
+    int64_t airTick;             /* esp_timer_get_time() of the last valid $RBAIR, 0 = never */
+    uint16_t rejected;           /* sentences dropped: cut, bad checksum or no valid field */
+    float lastYaw;               /* turn rate state of RB09_Slave_Loop() */
+    int64_t lastYawTick;
+    uint8_t qnhChanged;          /* set when the master's QNH is adopted, cleared by the LVGL task */
+} RB09_SlaveData;
 #endif
 
 #ifdef RB_ENABLE_TRK
@@ -196,6 +232,9 @@ typedef struct
 #endif
 #ifdef RB_ENABLE_EMS
   RB04_EMSData lastEmsData;
+#endif
+#ifdef RB_ENABLE_SLAVE_DEVICE
+  RB09_SlaveData slaveData;
 #endif
 #ifdef RB_ENABLE_MAP
 RB02_GpsMapStatus gpsMapStatus;

@@ -22,6 +22,12 @@
  * 02 -> Display with SixPack
  * 03 -> Display with Autopilot, ADSB, Radio, Flight Computer
  * 04 -> Display with EMS: Engine monitoring system
+ * 05 -> Display with Stratux BLE Traffic
+ * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+ * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * 09 -> Display with Slave device for RB-01, RB-02, RB-03, RB-04, RB-05, RB-06, RB-07 and RB-08
+ * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  * 
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available

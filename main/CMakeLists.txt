@@ -29,6 +29,7 @@ idf_component_register(
                               "RB/RB05_FlarmParser.c"
                               "RB/RB05_Traffic.c"
                               "RB/RB05_Radar.c"
+                              "RB/RB09_Slave.c"
                               "RB/RB02_NavCore.c"
                               "RB/RB02_Knob.c"
                               "RB/RB02_DriverAttitude.c"

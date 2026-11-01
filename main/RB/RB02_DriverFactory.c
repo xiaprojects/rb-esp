@@ -21,13 +21,21 @@
  * 02 -> Display with SixPack
  * 03 -> Display with Autopilot, ADSB, Radio, Flight Computer
  * 04 -> Display with EMS: Engine monitoring system
+ * 05 -> Display with Stratux BLE Traffic
  * 06 -> Display with Android 6.25" 7" 8" 10" 10.2"
+ * 07 -> Display with Stratux BLE Traffic composed by RB-05 + RB-03 in the same box
+ * 08 -> Voice Recognition Box with LLM and Natural speaking and Voice Recorder
+ * 09 -> Display with Slave device for RB-01, RB-02, RB-03, RB-04, RB-05, RB-06, RB-07 and RB-08
+ * Cloud -> Cloud services for RB devices, including flight data recording, flight data analysis, flight sharing and more
  *
  * Community edition will be free for all builders and personal use as defined by the licensing model
  * Dual licensing for commercial agreement is available
  *
 */
 #include "RB02_DriverFactory.h"
+#ifdef RB_ENABLE_SLAVE_DEVICE
+#include "RB09_Slave.h"
+#endif
 
 IMUdata Accel;
 IMUdata Gyro;
@@ -152,7 +160,10 @@ void Barometer_ReadCalibration(void)
 }
 void Barometer_Update(void)
 {
+#ifndef RB_ENABLE_SLAVE_DEVICE
+    // RB-09 reads no BMP280, RB09_Slave_Loop() writes the barometer variables
     Get_BMP280();
+#endif
 }
 #else
 void Barometer_Init(void)
@@ -200,11 +211,16 @@ void DriverFactory_Init(void) {
  * Driver Loop for Attitude, this shall fetch all the data from chip and invoke the Matrix alignment
  */
 void Driver_Attitude_Loop(void) {
+#ifdef RB_ENABLE_SLAVE_DEVICE
+    // RB-09 Remote display: the master's attitude and air data, the local sensors are not read
+    RB09_Slave_Loop(singletonConfig());
+#else
 #ifdef RB_ENABLE_QMI8658
         QMI8658_Loop();
 #endif
 #ifdef RB_ENABLE_BMI270
         BMI270_Loop();
+#endif
 #endif
     // TODO Move the Matrix management into a dedicated function (written in DriverAttitude.c)
 }
@@ -215,11 +231,16 @@ void Driver_Attitude_Loop(void) {
  * RB-02 used for static pressure
  * RB-04 used to compensate the MAP
  * RB-05 used for FL 1013 comparison
+ * RB-09 not used, the master sends the static pressure
  */
 void Driver_Barometer_Loop(void) {
+#ifdef RB_ENABLE_SLAVE_DEVICE
+    // RB09_Slave_Loop() writes the barometer variables from $RBAIR
+#else
 #ifdef RB_ENABLE_BMP280
     Get_BMP280();
 #endif
 #ifdef RB_ENABLE_BME680
+#endif
 #endif
 }
